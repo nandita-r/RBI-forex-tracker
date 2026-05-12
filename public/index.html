@@ -103,7 +103,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); font
 .safe-badge.warn{ background: var(--amber-bg); color: var(--amber); }
 
 /* History chart */
-.chart-wrap { position: relative; width: 100%; height: 140px; }
+.chart-wrap { position: relative; width: 100%; height: 280px; }
+.chart-legend { display: flex; gap: 24px; margin-top: 12px; font-size: 12px; color: #7b8099; font-family: 'DM Mono', monospace; }
+.chart-legend span { display: flex; align-items: center; gap: 7px; }
+.legend-gross  { width: 22px; height: 3px; background: #4a8fff; border-radius: 2px; display:inline-block; }
+.legend-usable { width: 22px; height: 3px; background: #1dc9a4; border-radius: 2px; display:inline-block; }
 
 /* News panel */
 .news-header {
@@ -338,6 +342,16 @@ function renderTrend(data) {
   const usableData = history.map(h => h.usable);
 
   if (trendChart) trendChart.destroy();
+
+  // Remove old legend if exists
+  const oldLegend = document.getElementById('chartLegend');
+  if (oldLegend) oldLegend.remove();
+
+  // Y axis range: tight around the data so movement is visible
+  const allVals = [...grossData, ...usableData];
+  const yMin = Math.floor((Math.min(...allVals) - 10) / 10) * 10;
+  const yMax = Math.ceil((Math.max(...allVals) + 10) / 10) * 10;
+
   trendChart = new Chart(document.getElementById('trendChart'), {
     type: 'line',
     data: {
@@ -347,23 +361,30 @@ function renderTrend(data) {
           label: 'Gross reserves',
           data: grossData,
           borderColor: '#4a8fff',
-          backgroundColor: 'rgba(74,143,255,0.07)',
-          borderWidth: 1.5,
-          pointRadius: 3,
+          backgroundColor: 'rgba(74,143,255,0.0)',
+          borderWidth: 2.5,
+          pointRadius: 5,
+          pointHoverRadius: 7,
           pointBackgroundColor: '#4a8fff',
-          tension: 0.3,
+          pointBorderColor: '#0f1117',
+          pointBorderWidth: 2,
+          tension: 0.35,
           fill: false,
-          borderDash: [4,3],
+          borderDash: [6, 3],
+          datalabels: { display: false },
         },
         {
           label: 'Usable reserves',
           data: usableData,
           borderColor: '#1dc9a4',
-          backgroundColor: 'rgba(29,201,164,0.08)',
-          borderWidth: 2,
-          pointRadius: 3,
+          backgroundColor: 'rgba(29,201,164,0.12)',
+          borderWidth: 2.5,
+          pointRadius: 5,
+          pointHoverRadius: 7,
           pointBackgroundColor: '#1dc9a4',
-          tension: 0.3,
+          pointBorderColor: '#0f1117',
+          pointBorderWidth: 2,
+          tension: 0.35,
           fill: true,
         },
       ]
@@ -371,33 +392,65 @@ function renderTrend(data) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: {
           backgroundColor: '#1e2336',
-          borderColor: 'rgba(255,255,255,0.1)',
+          borderColor: 'rgba(255,255,255,0.15)',
           borderWidth: 1,
-          titleColor: '#7b8099',
+          padding: 12,
+          titleColor: '#9ba3bf',
+          titleFont: { family: 'DM Mono', size: 11 },
           bodyColor: '#e8eaf0',
-          callbacks: { label: ctx => ` $${ctx.parsed.y}B` }
+          bodyFont: { family: 'DM Mono', size: 12 },
+          callbacks: {
+            title: ctx => 'Week of ' + ctx[0].label,
+            label: ctx => {
+              const label = ctx.dataset.label;
+              const val = ctx.parsed.y;
+              const prev = ctx.dataIndex > 0 ? ctx.dataset.data[ctx.dataIndex - 1] : null;
+              const chg = prev !== null ? (val - prev).toFixed(1) : null;
+              const arrow = chg === null ? '' : chg >= 0 ? '  ▲ +$' + chg + 'B' : '  ▼ $' + chg + 'B';
+              return ' ' + label + ': $' + val + 'B' + arrow;
+            }
+          }
         }
       },
       scales: {
-        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4a5068', font: { family: 'DM Mono', size: 10 } } },
+        x: {
+          grid: { color: 'rgba(255,255,255,0.05)', drawTicks: false },
+          border: { color: 'rgba(255,255,255,0.08)' },
+          ticks: {
+            color: '#7b8099',
+            font: { family: 'DM Mono', size: 11 },
+            padding: 8,
+            maxRotation: 0,
+          }
+        },
         y: {
-          grid: { color: 'rgba(255,255,255,0.04)' },
-          ticks: { color: '#4a5068', font: { family: 'DM Mono', size: 10 }, callback: v => `$${v}B` }
+          min: yMin,
+          max: yMax,
+          grid: { color: 'rgba(255,255,255,0.05)', drawTicks: false },
+          border: { color: 'rgba(255,255,255,0.08)', dash: [4,4] },
+          ticks: {
+            color: '#7b8099',
+            font: { family: 'DM Mono', size: 11 },
+            padding: 10,
+            callback: v => '$' + v + 'B',
+            maxTicksLimit: 6,
+          }
         }
       }
     }
   });
 
-  // Custom legend
-  const legendHtml = `
-    <div style="display:flex;gap:16px;margin-top:8px;font-size:10px;color:#7b8099;font-family:'DM Mono',monospace;">
-      <span style="display:flex;align-items:center;gap:4px;"><span style="width:16px;height:2px;background:#4a8fff;border-radius:1px;display:inline-block;border-top:2px dashed #4a8fff;"></span> Gross</span>
-      <span style="display:flex;align-items:center;gap:4px;"><span style="width:16px;height:2px;background:#1dc9a4;border-radius:1px;display:inline-block;"></span> Usable</span>
-    </div>`;
+  // Add legend below chart
+  const legendHtml = '<div id="chartLegend" class="chart-legend">'
+    + '<span><span class="legend-gross"></span> Gross reserves (dashed)</span>'
+    + '<span><span class="legend-usable"></span> True usable reserves</span>'
+    + '<span style="margin-left:auto;font-size:11px;color:#4a5068;">Hover for weekly change</span>'
+    + '</div>';
   document.querySelector('.chart-wrap').insertAdjacentHTML('afterend', legendHtml);
 }
 
