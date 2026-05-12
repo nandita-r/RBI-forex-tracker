@@ -542,28 +542,12 @@ function showError(msg, type = 'error') {
 }
 
 async function fetchSpotRate() {
-  // Use Yahoo Finance quote endpoint (no API key needed, CORS-friendly via proxy)
-  const PROXY = 'https://query1.finance.yahoo.com/v8/finance/chart/USDINR%3DX?interval=5m&range=1d';
+  // Routed through backend to avoid CORS — see /api/spot in server.js
   try {
-    const r = await fetch(PROXY);
+    const r = await fetch(API_BASE + '/api/spot');
+    if (!r.ok) throw new Error('Spot API returned ' + r.status);
     const data = await r.json();
-    const result = data.chart.result[0];
-    const meta = result.meta;
-    const timestamps = result.timestamp || [];
-    const closes = result.indicators.quote[0].close || [];
-
-    const current = meta.regularMarketPrice || closes[closes.length - 1];
-    const prev = meta.chartPreviousClose || meta.previousClose;
-    const low52 = meta.fiftyTwoWeekLow;
-    const high52 = meta.fiftyTwoWeekHigh;
-
-    // Build intraday history (last 60 points max)
-    const pts = timestamps.map((t, i) => ({
-      time: new Date(t * 1000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-      val: closes[i],
-    })).filter(p => p.val != null).slice(-60);
-
-    return { current: +current.toFixed(4), prev: +prev.toFixed(4), low52, high52, pts };
+    return data;
   } catch (e) {
     console.warn('Spot fetch failed:', e.message);
     return null;
