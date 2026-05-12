@@ -146,6 +146,14 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); font
 .news-loading svg { animation: spin 0.8s linear infinite; }
 .note { font-size: 10px; color: var(--dim); padding: 10px 16px; border-top: 1px solid var(--border); flex-shrink: 0; line-height: 1.5; }
 .error-banner { background: var(--red-bg); border: 1px solid rgba(240,90,90,0.2); border-radius: 6px; padding: 8px 12px; font-size: 11px; color: var(--red); margin-bottom: 4px; display: none; }
+.spot-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.card.spot { border-color: rgba(240,90,90,0.3); background: rgba(240,90,90,0.05); }
+.card.spot .card-value { color: var(--red); }
+.analyst-note { background: rgba(245,166,35,0.06); border: 1px solid rgba(245,166,35,0.2); border-left: 3px solid var(--amber); border-radius: 8px; padding: 14px 16px; }
+.analyst-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--amber); margin-bottom: 8px; font-weight: 500; }
+.analyst-body { font-size: 12px; color: #c8bfa0; line-height: 1.65; }
+.analyst-body strong { color: var(--amber); font-weight: 500; }
+.forex-chart-wrap { position: relative; width: 100%; height: 200px; }
 
 @media (max-width: 900px) {
   .main { grid-template-columns: 1fr; height: auto; overflow: visible; }
@@ -219,6 +227,40 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); font
         <canvas id="trendChart" role="img" aria-label="Weekly trend of RBI true usable forex reserves">Reserve trend data loading.</canvas>
       </div>
     </div>
+
+    <div class="spot-row">
+      <div class="card spot">
+        <div class="card-label">USD / INR spot rate</div>
+        <div class="card-value" id="spotRate">—</div>
+        <div class="card-sub" id="spotChg">—</div>
+      </div>
+      <div class="card">
+        <div class="card-label">52-week range</div>
+        <div class="card-value" id="spotRange">—</div>
+        <div class="card-sub" id="spotUpdated">—</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">USD / INR spot rate — intraday</div>
+      <div class="forex-chart-wrap">
+        <canvas id="forexChart" role="img" aria-label="USD/INR intraday spot rate chart">Spot rate data loading.</canvas>
+      </div>
+      <div id="forexLegend" style="margin-top:10px;font-size:11px;color:#4a5068;font-family:'DM Mono',monospace;">
+        Sourced from Yahoo Finance (15-min delayed). Higher = weaker rupee.
+      </div>
+    </div>
+
+    <div class="analyst-note">
+      <div class="analyst-title">⚠ Analyst note — forward book unwind: a one-time effect</div>
+      <div class="analyst-body">
+        The RBI's $100M net open position cap forced banks to unwind an estimated <strong>$30–40B</strong> in long-dollar positions, temporarily strengthening the rupee and slowing reserve depletion. <strong>This is a one-time effect.</strong>
+        <br><br>
+        Going forward, every market participant — corporates, importers, fund managers, and households — will rationally seek to build their own dollar buffers given the rupee's trajectory. This structural shift in dollar demand means the RBI cannot rely on regulatory squeezes to defend the currency repeatedly. <strong>Each successive intervention tool loses potency once the market adapts.</strong>
+        <br><br>
+        With the forward book at a record <strong>$103B</strong>, the RBI faces a compounding problem: future contract maturities require dollar purchases that will themselves pressure the rupee, creating a feedback loop that only a fundamental improvement in the current account or a sustained capital inflow reversal can break.
+      </div>
+    </div>
   </div>
 
   <div class="right">
@@ -247,6 +289,9 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); font
 const API_BASE = window.location.origin;
 let allNewsItems = [];
 let trendChart = null;
+let forexChart = null;
+let spotHistory = [];
+let lastSpotFetch = 0;
 
 // Simulated historical trend (last 8 weeks) — backend will supply real data in future
 const TREND_HISTORY = [
@@ -496,6 +541,130 @@ function showError(msg, type = 'error') {
   el.style.color = type === 'warn' ? 'var(--amber)' : 'var(--red)';
 }
 
+async function fetchSpotRate() {
+  // Use Yahoo Finance quote endpoint (no API key needed, CORS-friendly via proxy)
+  const PROXY = 'https://query1.finance.yahoo.com/v8/finance/chart/USDINR%3DX?interval=5m&range=1d';
+  try {
+    const r = await fetch(PROXY);
+    const data = await r.json();
+    const result = data.chart.result[0];
+    const meta = result.meta;
+    const timestamps = result.timestamp || [];
+    const closes = result.indicators.quote[0].close || [];
+
+    const current = meta.regularMarketPrice || closes[closes.length - 1];
+    const prev = meta.chartPreviousClose || meta.previousClose;
+    const low52 = meta.fiftyTwoWeekLow;
+    const high52 = meta.fiftyTwoWeekHigh;
+
+    // Build intraday history (last 60 points max)
+    const pts = timestamps.map((t, i) => ({
+      time: new Date(t * 1000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+      val: closes[i],
+    })).filter(p => p.val != null).slice(-60);
+
+    return { current: +current.toFixed(4), prev: +prev.toFixed(4), low52, high52, pts };
+  } catch (e) {
+    console.warn('Spot fetch failed:', e.message);
+    return null;
+  }
+}
+
+function renderSpotMetrics(s) {
+  if (!s) { document.getElementById('spotRate').textContent = 'N/A'; return; }
+  document.getElementById('spotRate').textContent = s.current.toFixed(2);
+  const chg = +(s.current - s.prev).toFixed(4);
+  const pct = +((chg / s.prev) * 100).toFixed(2);
+  const el = document.getElementById('spotChg');
+  el.textContent = (chg >= 0 ? '▲ +' : '▼ ') + chg.toFixed(2) + ' (' + (chg >= 0 ? '+' : '') + pct + '%) today';
+  el.className = 'card-sub ' + (chg >= 0 ? 'neg' : 'pos');
+  if (s.low52 && s.high52) {
+    document.getElementById('spotRange').textContent = s.low52.toFixed(2) + ' – ' + s.high52.toFixed(2);
+  }
+  document.getElementById('spotUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function renderForexChart(pts) {
+  if (!pts || pts.length === 0) return;
+  if (forexChart) forexChart.destroy();
+
+  const allVals = pts.map(p => p.val);
+  const yMin = Math.floor((Math.min(...allVals) - 0.2) * 10) / 10;
+  const yMax = Math.ceil((Math.max(...allVals) + 0.2) * 10) / 10;
+
+  // Color each segment: red if rising (rupee weakening), green if falling
+  const segColors = pts.map((p, i) => {
+    if (i === 0) return 'rgba(240,90,90,0.8)';
+    return pts[i].val >= pts[i-1].val ? 'rgba(240,90,90,0.8)' : 'rgba(29,201,164,0.8)';
+  });
+
+  forexChart = new Chart(document.getElementById('forexChart'), {
+    type: 'line',
+    data: {
+      labels: pts.map(p => p.time),
+      datasets: [{
+        label: 'USD/INR',
+        data: pts.map(p => p.val),
+        borderColor: '#f05a5a',
+        backgroundColor: 'rgba(240,90,90,0.07)',
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        pointHoverBackgroundColor: '#f05a5a',
+        tension: 0.3,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1e2336',
+          borderColor: 'rgba(255,255,255,0.15)',
+          borderWidth: 1,
+          padding: 10,
+          titleColor: '#9ba3bf',
+          titleFont: { family: 'DM Mono', size: 11 },
+          bodyColor: '#e8eaf0',
+          bodyFont: { family: 'DM Mono', size: 12 },
+          callbacks: {
+            title: ctx => ctx[0].label,
+            label: ctx => ' USD/INR: ' + ctx.parsed.y.toFixed(4),
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,0.04)', drawTicks: false },
+          border: { color: 'rgba(255,255,255,0.08)' },
+          ticks: {
+            color: '#7b8099',
+            font: { family: 'DM Mono', size: 10 },
+            maxTicksLimit: 8,
+            maxRotation: 0,
+          }
+        },
+        y: {
+          min: yMin,
+          max: yMax,
+          grid: { color: 'rgba(255,255,255,0.04)', drawTicks: false },
+          border: { color: 'rgba(255,255,255,0.08)', dash: [4,4] },
+          ticks: {
+            color: '#7b8099',
+            font: { family: 'DM Mono', size: 10 },
+            padding: 8,
+            callback: v => v.toFixed(2),
+            maxTicksLimit: 5,
+          }
+        }
+      }
+    }
+  });
+}
+
 async function refreshAll(force = false) {
   const btn = document.getElementById('refreshBtn');
   btn.classList.add('loading');
@@ -509,6 +678,9 @@ async function refreshAll(force = false) {
     renderImportCover(reserves);
     renderTrend(reserves);
     if (news?.items?.length) renderNews(news.items);
+    const spot = await fetchSpotRate();
+    renderSpotMetrics(spot);
+    if (spot?.pts) renderForexChart(spot.pts);
   } catch (err) {
     showError('Could not reach backend. Make sure the server is running on localhost:3000.');
     // Still try to show static data
@@ -522,6 +694,9 @@ async function refreshAll(force = false) {
     renderWaterfall(staticReserves);
     renderImportCover(staticReserves);
     renderTrend(staticReserves);
+    const spotFallback = await fetchSpotRate();
+    renderSpotMetrics(spotFallback);
+    if (spotFallback?.pts) renderForexChart(spotFallback.pts);
   }
 
   btn.classList.remove('loading');
@@ -532,6 +707,8 @@ async function refreshAll(force = false) {
 refreshAll(false);
 // Auto-refresh every 30 minutes
 setInterval(() => refreshAll(false), 30 * 60 * 1000);
+// Auto-refresh spot rate every 5 minutes
+setInterval(async () => { const s = await fetchSpotRate(); renderSpotMetrics(s); if (s?.pts) renderForexChart(s.pts); }, 5 * 60 * 1000);
 </script>
 </body>
 </html>
