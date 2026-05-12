@@ -169,4 +169,20 @@ app.listen(PORT, async () => {
   console.log('✅  Ready\n');
 });
 
+
+// ── Keep-alive: self-ping every 14 min to prevent Railway free-tier sleep ──
+// (Railway free tier sleeps after ~15 min inactivity without this)
+if (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_STATIC_URL) {
+  const baseUrl = 'https://' + (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_STATIC_URL);
+  const http = require('https');
+  setInterval(() => {
+    http.get(baseUrl + '/api/health', (res) => {
+      console.log('[KeepAlive] Pinged /api/health ->', res.statusCode);
+    }).on('error', (e) => {
+      console.warn('[KeepAlive] Ping failed:', e.message);
+    });
+  }, 14 * 60 * 1000); // every 14 minutes
+  console.log('[KeepAlive] Enabled for', baseUrl);
+}
+
 module.exports = app;
