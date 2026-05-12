@@ -155,10 +155,42 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); font
 .analyst-body strong { color: var(--amber); font-weight: 500; }
 .forex-chart-wrap { position: relative; width: 100%; height: 200px; }
 
+/* Hero banner */
+.hero {
+  background: linear-gradient(135deg, rgba(29,201,164,0.08) 0%, rgba(29,201,164,0.03) 100%);
+  border: 1px solid rgba(29,201,164,0.25);
+  border-radius: 12px;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.hero-left { display: flex; flex-direction: column; gap: 4px; }
+.hero-eyebrow { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--teal); opacity: 0.8; }
+.hero-value { font-family: var(--mono); font-size: 52px; font-weight: 500; color: var(--teal); line-height: 1; letter-spacing: -0.02em; }
+.hero-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.hero-divider { width: 1px; height: 70px; background: rgba(29,201,164,0.2); flex-shrink: 0; }
+.hero-cover { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.hero-cover-value { font-family: var(--mono); font-size: 36px; font-weight: 500; color: var(--teal); line-height: 1; }
+.hero-cover-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.hero-cover-badge { font-size: 10px; padding: 3px 8px; border-radius: 4px; margin-top: 4px; }
+.hero-cover-badge.ok   { background: var(--green-bg); color: var(--green); }
+.hero-cover-badge.warn { background: var(--amber-bg); color: var(--amber); }
+.hero-right { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+.hero-stat { text-align: right; }
+.hero-stat-val { font-family: var(--mono); font-size: 15px; color: var(--text); }
+.hero-stat-lbl { font-size: 10px; color: var(--muted); margin-top: 1px; }
+.hero-stat-val.neg { color: var(--red); }
+.hero-stat-val.pos { color: var(--green); }
+
 @media (max-width: 900px) {
   .main { grid-template-columns: 1fr; height: auto; overflow: visible; }
   .right { border-left: none; border-top: 1px solid var(--border); max-height: 500px; }
   .metric-row { grid-template-columns: repeat(2,1fr); }
+  .hero { flex-direction: column; align-items: flex-start; }
+  .hero-divider { display: none; }
+  .hero-value { font-size: 38px; }
 }
 </style>
 </head>
@@ -186,6 +218,37 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); font
 <div class="main">
   <div class="left">
     <div class="error-banner" id="errorBanner"></div>
+
+    <!-- Hero: true usable + import cover prominently at top -->
+    <div class="hero">
+      <div class="hero-left">
+        <div class="hero-eyebrow">True usable forex reserves</div>
+        <div class="hero-value" id="heroUsable">—</div>
+        <div class="hero-label">Gross less gold · fwd book · SDRs &nbsp;|&nbsp; <span id="heroWeek">Loading...</span></div>
+      </div>
+      <div class="hero-divider"></div>
+      <div class="hero-cover">
+        <div class="hero-cover-label">True import cover</div>
+        <div class="hero-cover-value" id="heroCover">—</div>
+        <div class="hero-cover-label">months</div>
+        <div class="hero-cover-badge" id="heroCoverBadge">—</div>
+      </div>
+      <div class="hero-divider"></div>
+      <div class="hero-right">
+        <div class="hero-stat">
+          <div class="hero-stat-val" id="heroGross">—</div>
+          <div class="hero-stat-lbl">Gross reserves</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-val" id="heroGrossChg">—</div>
+          <div class="hero-stat-lbl">Change vs prev week</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-val" id="heroSpot">—</div>
+          <div class="hero-stat-lbl">USD / INR spot</div>
+        </div>
+      </div>
+    </div>
 
     <div class="metric-row">
       <div class="card">
@@ -266,7 +329,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); font
   <div class="right">
     <div class="news-header">
       <div class="news-title"><div class="live-dot"></div> RBI / GOI forex impact</div>
-      <span class="news-updated" id="newsUpdated">—</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="news-updated" id="newsUpdated">—</span>
+        <span class="news-updated" id="newsCountdown" style="color:rgba(29,201,164,0.6);">—</span>
+      </div>
     </div>
     <div class="news-filters">
       <button class="filter-btn active" data-filter="all" onclick="filterNews('all',this)">All</button>
@@ -313,18 +379,33 @@ async function fetchAll(force = false) {
 }
 
 function renderMetrics(d) {
-  document.getElementById('mGross').textContent = `$${d.gross}B`;
-  document.getElementById('mGold').textContent  = `$${d.gold}B`;
-  document.getElementById('mFwd').textContent   = `$${d.forwardBook}B`;
-  document.getElementById('mUsable').textContent= `$${d.usable}B`;
+  document.getElementById('mGross').textContent = `${d.gross}B`;
+  document.getElementById('mGold').textContent  = `${d.gold}B`;
+  document.getElementById('mFwd').textContent   = `${d.forwardBook}B`;
+  document.getElementById('mUsable').textContent= `${d.usable}B`;
   document.getElementById('mFwdAsOf').textContent = `As of ${d.forwardBookAsOf}`;
   document.getElementById('asOf').textContent   = `Week ending ${d.weekEnding}`;
 
   const chg = d.prevGross ? +(d.gross - d.prevGross).toFixed(1) : null;
   const chgEl = document.getElementById('mGrossChg');
   if (chg !== null) {
-    chgEl.textContent = `${chg >= 0 ? '▲' : '▼'} $${Math.abs(chg)}B vs prev week`;
+    chgEl.textContent = `${chg >= 0 ? '▲' : '▼'} ${Math.abs(chg)}B vs prev week`;
     chgEl.className = 'card-sub ' + (chg >= 0 ? 'pos' : 'neg');
+  }
+
+  // Update hero banner
+  document.getElementById('heroUsable').textContent = `${d.usable}B`;
+  document.getElementById('heroWeek').textContent = `Week ending ${d.weekEnding}`;
+  document.getElementById('heroGross').textContent = `${d.gross}B`;
+  document.getElementById('heroCover').textContent = d.usableImportCover || '—';
+  const coverOk = d.usableImportCover >= 6;
+  const badge = document.getElementById('heroCoverBadge');
+  badge.textContent = coverOk ? '✓ Above safe threshold' : '⚠ Below safe threshold';
+  badge.className = 'hero-cover-badge ' + (coverOk ? 'ok' : 'warn');
+  if (chg !== null) {
+    const hChg = document.getElementById('heroGrossChg');
+    hChg.textContent = `${chg >= 0 ? '▲ +' : '▼ '}${Math.abs(chg)}B`;
+    hChg.className = 'hero-stat-val ' + (chg >= 0 ? 'pos' : 'neg');
   }
 
   if (d.note) showError(d.note, 'warn');
@@ -505,6 +586,7 @@ function renderNews(items) {
   document.getElementById('newsLoading').style.display = 'none';
   document.getElementById('newsFeed').style.display = 'block';
   document.getElementById('newsUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  newsNextRefresh = Date.now() + 15 * 60 * 1000;
 }
 
 function applyNewsFilter(filter) {
@@ -557,6 +639,12 @@ async function fetchSpotRate() {
 function renderSpotMetrics(s) {
   if (!s) { document.getElementById('spotRate').textContent = 'N/A'; return; }
   document.getElementById('spotRate').textContent = s.current.toFixed(2);
+  const heroSpotEl = document.getElementById('heroSpot');
+  if (heroSpotEl) {
+    heroSpotEl.textContent = s.current.toFixed(2);
+    const sc = +(s.current - s.prev).toFixed(2);
+    heroSpotEl.className = 'hero-stat-val ' + (sc >= 0 ? 'neg' : 'pos');
+  }
   const chg = +(s.current - s.prev).toFixed(4);
   const pct = +((chg / s.prev) * 100).toFixed(2);
   const el = document.getElementById('spotChg');
@@ -687,12 +775,31 @@ async function refreshAll(force = false) {
   btn.disabled = false;
 }
 
+// News refresh countdown display
+let newsNextRefresh = Date.now() + 15 * 60 * 1000;
+function updateNewsCountdown() {
+  const remaining = Math.max(0, newsNextRefresh - Date.now());
+  const m = Math.floor(remaining / 60000);
+  const s = Math.floor((remaining % 60000) / 1000);
+  const el = document.getElementById('newsCountdown');
+  if (el) el.textContent = 'next in ' + m + ':' + String(s).padStart(2,'0');
+}
+setInterval(updateNewsCountdown, 1000);
+
 // Boot
 refreshAll(false);
 // Auto-refresh every 30 minutes
 setInterval(() => refreshAll(false), 30 * 60 * 1000);
 // Auto-refresh spot rate every 5 minutes
 setInterval(async () => { const s = await fetchSpotRate(); renderSpotMetrics(s); if (s?.pts) renderForexChart(s.pts); }, 5 * 60 * 1000);
+// Auto-refresh news every 15 minutes independently
+setInterval(async () => {
+  try {
+    const r = await fetch(API_BASE + '/api/news?refresh=true');
+    const { data } = await r.json();
+    if (data?.items?.length) renderNews(data.items);
+  } catch(e) { console.warn('News auto-refresh failed', e); }
+}, 15 * 60 * 1000);
 </script>
 </body>
 </html>
