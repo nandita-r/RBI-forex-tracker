@@ -286,7 +286,7 @@ function renderMetrics(d){
   document.getElementById('mGold').textContent='$'+d.gold+'B';
   document.getElementById('mFwd').textContent='$'+d.forwardBook+'B';
   document.getElementById('mUsable').textContent='$'+d.usable+'B';
-  document.getElementById('mFwdAsOf').textContent='As of '+d.forwardBookAsOf;
+  document.getElementById('mFwdAsOf').textContent='Est. as of '+d.forwardBookAsOf+' (Apr pending)';
   document.getElementById('asOf').textContent='Week ending '+d.weekEnding;
   var chg=d.prevGross?+(d.gross-d.prevGross).toFixed(1):null;
   var cel=document.getElementById('mGrossChg');
