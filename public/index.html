@@ -3,1032 +3,517 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RBI Forex Tracker — True Usable Reserves</title>
+<title>RBI Forex Tracker - True Usable Reserves</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
-:root {
-  --bg: #0f1117;
-  --surface: #181c27;
-  --surface2: #1e2336;
-  --border: rgba(255,255,255,0.07);
-  --border2: rgba(255,255,255,0.13);
-  --text: #e8eaf0;
-  --muted: #7b8099;
-  --dim: #4a5068;
-  --green: #22c87a;
-  --green-bg: rgba(34,200,122,0.1);
-  --red: #f05a5a;
-  --red-bg: rgba(240,90,90,0.1);
-  --amber: #f5a623;
-  --amber-bg: rgba(245,166,35,0.1);
-  --blue: #4a8fff;
-  --blue-bg: rgba(74,143,255,0.1);
-  --teal: #1dc9a4;
-  --mono: 'DM Mono', monospace;
-  --sans: 'DM Sans', sans-serif;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; min-height: 100vh; }
-
-.top-bar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 24px; border-bottom: 1px solid var(--border);
-  background: var(--surface);
-}
-.logo { display: flex; align-items: center; gap: 10px; }
-.logo-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 8px var(--teal); animation: pulse 2s infinite; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-.logo-text { font-family: var(--mono); font-size: 13px; font-weight: 500; letter-spacing: 0.08em; color: var(--text); }
-.logo-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
-.top-right { display: flex; align-items: center; gap: 12px; }
-.as-of { font-family: var(--mono); font-size: 11px; color: var(--muted); }
-.refresh-btn {
-  display: flex; align-items: center; gap: 6px;
-  padding: 7px 16px; border-radius: 6px; cursor: pointer;
-  background: var(--teal); color: #0f1117; border: none;
-  font-family: var(--sans); font-size: 12px; font-weight: 500;
-  transition: opacity 0.15s;
-}
-.refresh-btn:hover { opacity: 0.85; }
-.refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.refresh-btn svg { width: 13px; height: 13px; }
-.refresh-btn.loading svg { animation: spin 0.7s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.main { display: grid; grid-template-columns: 1fr 340px; height: calc(100vh - 53px); overflow: hidden; }
-.left { overflow-y: auto; padding: 20px 20px 20px 24px; display: flex; flex-direction: column; gap: 16px; }
-.right { border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
-
-/* Metric cards */
-.metric-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-.card {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: 10px; padding: 14px 16px;
-}
-.card-label { font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; }
-.card-value { font-family: var(--mono); font-size: 22px; font-weight: 500; color: var(--text); }
-.card-sub { font-size: 10px; color: var(--muted); margin-top: 4px; font-family: var(--mono); }
-.card-sub.pos { color: var(--green); }
-.card-sub.neg { color: var(--red); }
-.card.usable { border-color: rgba(29,201,164,0.3); background: rgba(29,201,164,0.05); }
-.card.usable .card-value { color: var(--teal); }
-.card.warn .card-value { color: var(--amber); }
-
-/* Waterfall */
-.section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
-.section-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 14px; }
-.wf-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
-.wf-label { font-size: 11px; color: var(--muted); width: 170px; flex-shrink: 0; text-align: right; }
-.wf-track { flex: 1; height: 24px; background: rgba(255,255,255,0.04); border-radius: 4px; overflow: hidden; position: relative; }
-.wf-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
-.wf-fill span { font-family: var(--mono); font-size: 10px; font-weight: 500; }
-.wf-gross { background: var(--blue); } .wf-gross span { color: #0a1a3a; }
-.wf-gold  { background: var(--amber); } .wf-gold span { color: #2a1500; }
-.wf-fwd   { background: var(--red); } .wf-fwd span { color: #2a0000; }
-.wf-sdr   { background: var(--dim); } .wf-sdr span { color: var(--muted); }
-.wf-usable{ background: var(--teal); } .wf-usable span { color: #002a1a; }
-.wf-sign  { font-size: 13px; color: var(--dim); width: 12px; text-align: center; flex-shrink: 0; }
-
-/* Import cover */
-.cover-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
-.cover-item { text-align: center; }
-.cover-bar-wrap { display: flex; align-items: flex-end; justify-content: center; height: 70px; margin-bottom: 6px; }
-.cover-bar { width: 48px; border-radius: 4px 4px 0 0; transition: height 0.8s cubic-bezier(0.4,0,0.2,1); display: flex; align-items: flex-start; justify-content: center; padding-top: 5px; }
-.cover-bar span { font-family: var(--mono); font-size: 11px; font-weight: 500; }
-.cover-lbl { font-size: 10px; color: var(--muted); margin-top: 4px; }
-.safe-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; padding: 5px 10px; border-radius: 5px; margin-top: 10px; }
-.safe-badge.ok  { background: var(--green-bg); color: var(--green); }
-.safe-badge.warn{ background: var(--amber-bg); color: var(--amber); }
-
-/* History chart */
-.chart-wrap { position: relative; width: 100%; height: 280px; }
-.chart-legend { display: flex; gap: 24px; margin-top: 12px; font-size: 12px; color: #7b8099; font-family: 'DM Mono', monospace; }
-.chart-legend span { display: flex; align-items: center; gap: 7px; }
-.legend-gross  { width: 22px; height: 3px; background: #4a8fff; border-radius: 2px; display:inline-block; }
-.legend-usable { width: 22px; height: 3px; background: #1dc9a4; border-radius: 2px; display:inline-block; }
-
-/* News panel */
-.news-header {
-  padding: 14px 16px; border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
-}
-.news-title { font-size: 12px; font-weight: 500; color: var(--text); display: flex; align-items: center; gap: 6px; }
-.live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); animation: pulse 1.5s infinite; }
-.news-updated { font-family: var(--mono); font-size: 10px; color: var(--dim); }
-.news-filters { display: flex; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap; }
-.filter-btn {
-  font-size: 10px; padding: 3px 10px; border-radius: 20px; cursor: pointer;
-  background: transparent; border: 1px solid var(--border2); color: var(--muted);
-  transition: all 0.15s;
-}
-.filter-btn.active { color: var(--text); border-color: var(--teal); background: rgba(29,201,164,0.08); }
-.news-feed { overflow-y: auto; flex: 1; }
-.news-item {
-  padding: 11px 16px; border-bottom: 1px solid var(--border);
-  cursor: default; transition: background 0.12s;
-}
-.news-item:hover { background: rgba(255,255,255,0.02); }
-.news-item:last-child { border-bottom: none; }
-.news-tag {
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: 9px; font-weight: 500; letter-spacing: 0.05em;
-  padding: 2px 7px; border-radius: 3px; margin-bottom: 5px; text-transform: uppercase;
-}
-.news-tag.pos { background: var(--green-bg); color: var(--green); }
-.news-tag.neg { background: var(--red-bg); color: var(--red); }
-.news-tag.neu { background: rgba(255,255,255,0.05); color: var(--muted); }
-.news-text { font-size: 12px; color: var(--text); line-height: 1.55; margin-bottom: 4px; }
-.news-meta { font-size: 10px; color: var(--dim); display: flex; gap: 8px; }
-.news-cat { background: rgba(255,255,255,0.04); padding: 1px 5px; border-radius: 2px; }
-.news-loading { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 20px; color: var(--muted); font-size: 12px; }
-.news-loading svg { animation: spin 0.8s linear infinite; }
-.note { font-size: 10px; color: var(--dim); padding: 10px 16px; border-top: 1px solid var(--border); flex-shrink: 0; line-height: 1.5; }
-.error-banner { background: var(--red-bg); border: 1px solid rgba(240,90,90,0.2); border-radius: 6px; padding: 8px 12px; font-size: 11px; color: var(--red); margin-bottom: 4px; display: none; }
-.spot-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.card.spot { border-color: rgba(240,90,90,0.3); background: rgba(240,90,90,0.05); }
-.card.spot .card-value { color: var(--red); }
-.analyst-note { background: rgba(245,166,35,0.06); border: 1px solid rgba(245,166,35,0.2); border-left: 3px solid var(--amber); border-radius: 8px; padding: 14px 16px; }
-.analyst-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--amber); margin-bottom: 8px; font-weight: 500; }
-.analyst-body { font-size: 12px; color: #c8bfa0; line-height: 1.65; }
-.analyst-body strong { color: var(--amber); font-weight: 500; }
-.forex-chart-wrap { position: relative; width: 100%; height: 200px; }
-
-/* Hero banner */
-.hero {
-  background: linear-gradient(135deg, rgba(29,201,164,0.08) 0%, rgba(29,201,164,0.03) 100%);
-  border: 1px solid rgba(29,201,164,0.25);
-  border-radius: 12px;
-  padding: 20px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-}
-.hero-left { display: flex; flex-direction: column; gap: 4px; }
-.hero-eyebrow { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--teal); opacity: 0.8; }
-.hero-value { font-family: var(--mono); font-size: 52px; font-weight: 500; color: var(--teal); line-height: 1; letter-spacing: -0.02em; }
-.hero-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
-.hero-divider { width: 1px; height: 70px; background: rgba(29,201,164,0.2); flex-shrink: 0; }
-.hero-cover { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.hero-cover-value { font-family: var(--mono); font-size: 36px; font-weight: 500; color: var(--teal); line-height: 1; }
-.hero-cover-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
-.hero-cover-badge { font-size: 10px; padding: 3px 8px; border-radius: 4px; margin-top: 4px; }
-.hero-cover-badge.ok   { background: var(--green-bg); color: var(--green); }
-.hero-cover-badge.warn { background: var(--amber-bg); color: var(--amber); }
-.hero-right { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
-.hero-stat { text-align: right; }
-.hero-stat-val { font-family: var(--mono); font-size: 15px; color: var(--text); }
-.hero-stat-lbl { font-size: 10px; color: var(--muted); margin-top: 1px; }
-.hero-stat-val.neg { color: var(--red); }
-.hero-stat-val.pos { color: var(--green); }
-
-/* Scenario toggle */
-.scenario-section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; }
-.scenario-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
-.scenario-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
-.scenario-subtitle { font-size: 11px; color: var(--dim); margin-top: 2px; }
-.slider-wrap { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-.slider-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
-.rupee-slider {
-  flex: 1; -webkit-appearance: none; appearance: none;
-  height: 4px; border-radius: 2px; outline: none; cursor: pointer;
-  background: linear-gradient(to right, var(--green) 0%, var(--amber) 50%, var(--red) 100%);
-}
-.rupee-slider::-webkit-slider-thumb {
-  -webkit-appearance: none; appearance: none;
-  width: 18px; height: 18px; border-radius: 50%;
-  background: var(--text); border: 2px solid var(--teal);
-  cursor: pointer; box-shadow: 0 0 6px rgba(29,201,164,0.4);
-}
-.rupee-slider::-moz-range-thumb {
-  width: 18px; height: 18px; border-radius: 50%;
-  background: var(--text); border: 2px solid var(--teal);
-  cursor: pointer;
-}
-.slider-val { font-family: var(--mono); font-size: 15px; font-weight: 500; color: var(--text); min-width: 52px; text-align: right; }
-.scenario-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
-.scenario-card { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; text-align: center; }
-.scenario-card-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
-.scenario-card-value { font-family: var(--mono); font-size: 18px; font-weight: 500; }
-.scenario-card-sub { font-size: 10px; color: var(--dim); margin-top: 3px; }
-.scenario-verdict { border-radius: 8px; padding: 12px 16px; font-size: 12px; line-height: 1.6; }
-.scenario-verdict.safe   { background: var(--green-bg); border: 1px solid rgba(34,200,122,0.2); color: #a0f0c8; }
-.scenario-verdict.caution{ background: var(--amber-bg); border: 1px solid rgba(245,166,35,0.2); color: #f5cc80; }
-.scenario-verdict.danger { background: var(--red-bg);   border: 1px solid rgba(240,90,90,0.2);  color: #f5a0a0; }
-.scenario-presets { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
-.preset-btn {
-  font-size: 10px; padding: 4px 10px; border-radius: 4px; cursor: pointer;
-  background: rgba(255,255,255,0.04); border: 1px solid var(--border2); color: var(--muted);
-  font-family: var(--mono); transition: all 0.15s;
-}
-.preset-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); }
-.preset-btn.active { border-color: var(--teal); color: var(--teal); background: rgba(29,201,164,0.08); }
-
-@media (max-width: 900px) {
-  .main { grid-template-columns: 1fr; height: auto; overflow: visible; }
-  .right { border-left: none; border-top: 1px solid var(--border); max-height: 500px; }
-  .metric-row { grid-template-columns: repeat(2,1fr); }
-  .hero { flex-direction: column; align-items: flex-start; }
-  .hero-divider { display: none; }
-  .hero-value { font-size: 38px; }
-  .scenario-grid { grid-template-columns: repeat(2,1fr); }
-}
+:root{--bg:#0f1117;--surface:#181c27;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);--text:#e8eaf0;--muted:#7b8099;--dim:#4a5068;--green:#22c87a;--green-bg:rgba(34,200,122,0.1);--red:#f05a5a;--red-bg:rgba(240,90,90,0.1);--amber:#f5a623;--amber-bg:rgba(245,166,35,0.1);--blue:#4a8fff;--teal:#1dc9a4;--mono:'DM Mono',monospace;--sans:'DM Sans',sans-serif;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;min-height:100vh;}
+.top-bar{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--border);background:var(--surface);}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--teal);box-shadow:0 0 8px var(--teal);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.logo-text{font-family:var(--mono);font-size:13px;font-weight:500;letter-spacing:.08em;}
+.logo-sub{font-size:11px;color:var(--muted);margin-top:1px;}
+.as-of{font-family:var(--mono);font-size:11px;color:var(--muted);}
+.refresh-btn{display:flex;align-items:center;gap:6px;padding:7px 16px;border-radius:6px;cursor:pointer;background:var(--teal);color:#0f1117;border:none;font-family:var(--sans);font-size:12px;font-weight:500;transition:opacity .15s;}
+.refresh-btn:hover{opacity:.85;}.refresh-btn:disabled{opacity:.5;cursor:not-allowed;}
+.refresh-btn svg{width:13px;height:13px;}
+.refresh-btn.loading svg{animation:spin .7s linear infinite;}
+.main{display:grid;grid-template-columns:1fr 340px;height:calc(100vh - 53px);overflow:hidden;}
+.left{overflow-y:auto;padding:20px 20px 20px 24px;display:flex;flex-direction:column;gap:14px;}
+.right{border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+.hero{background:linear-gradient(135deg,rgba(29,201,164,.08),rgba(29,201,164,.02));border:1px solid rgba(29,201,164,.25);border-radius:12px;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;}
+.hero-left{display:flex;flex-direction:column;gap:4px;}
+.hero-eyebrow{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--teal);opacity:.8;}
+.hero-value{font-family:var(--mono);font-size:52px;font-weight:500;color:var(--teal);line-height:1;letter-spacing:-.02em;}
+.hero-label{font-size:12px;color:var(--muted);margin-top:4px;}
+.hero-divider{width:1px;height:70px;background:rgba(29,201,164,.2);flex-shrink:0;}
+.hero-cover{display:flex;flex-direction:column;align-items:center;gap:4px;}
+.hero-cover-value{font-family:var(--mono);font-size:36px;font-weight:500;color:var(--teal);line-height:1;}
+.hero-cover-label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+.hero-cover-badge{font-size:10px;padding:3px 8px;border-radius:4px;margin-top:4px;}
+.hero-cover-badge.ok{background:var(--green-bg);color:var(--green);}
+.hero-cover-badge.warn{background:var(--amber-bg);color:var(--amber);}
+.hero-right{display:flex;flex-direction:column;gap:8px;align-items:flex-end;}
+.hero-stat{text-align:right;}
+.hero-stat-val{font-family:var(--mono);font-size:15px;color:var(--text);}
+.hero-stat-val.neg{color:var(--red);}.hero-stat-val.pos{color:var(--green);}
+.hero-stat-lbl{font-size:10px;color:var(--muted);margin-top:1px;}
+.metric-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;}
+.card-label{font-size:10px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;}
+.card-value{font-family:var(--mono);font-size:22px;font-weight:500;color:var(--text);}
+.card-sub{font-size:10px;color:var(--muted);margin-top:4px;font-family:var(--mono);}
+.card-sub.pos{color:var(--green);}.card-sub.neg{color:var(--red);}
+.card.usable{border-color:rgba(29,201,164,.3);background:rgba(29,201,164,.05);}
+.card.usable .card-value{color:var(--teal);}
+.card.warn .card-value{color:var(--amber);}
+.card.spot{border-color:rgba(240,90,90,.3);background:rgba(240,90,90,.05);}
+.card.spot .card-value{color:var(--red);}
+.spot-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 18px;}
+.section-title{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:14px;}
+.wf-row{display:flex;align-items:center;gap:10px;margin-bottom:9px;}
+.wf-label{font-size:11px;color:var(--muted);width:170px;flex-shrink:0;text-align:right;}
+.wf-track{flex:1;height:24px;background:rgba(255,255,255,.04);border-radius:4px;overflow:hidden;}
+.wf-fill{height:100%;border-radius:4px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;transition:width .8s ease;}
+.wf-fill span{font-family:var(--mono);font-size:10px;font-weight:500;}
+.wf-gross{background:var(--blue);}.wf-gross span{color:#0a1a3a;}
+.wf-gold{background:var(--amber);}.wf-gold span{color:#2a1500;}
+.wf-fwd{background:var(--red);}.wf-fwd span{color:#2a0000;}
+.wf-sdr{background:var(--dim);}.wf-sdr span{color:var(--muted);}
+.wf-usable{background:var(--teal);}.wf-usable span{color:#002a1a;}
+.wf-sign{font-size:13px;color:var(--dim);width:12px;text-align:center;flex-shrink:0;}
+.cover-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.cover-item{text-align:center;}
+.cover-bar-wrap{display:flex;align-items:flex-end;justify-content:center;height:70px;margin-bottom:6px;}
+.cover-bar{width:48px;border-radius:4px 4px 0 0;transition:height .8s ease;display:flex;align-items:flex-start;justify-content:center;padding-top:5px;}
+.cover-bar span{font-family:var(--mono);font-size:11px;font-weight:500;}
+.cover-lbl{font-size:10px;color:var(--muted);margin-top:4px;}
+.safe-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:5px 10px;border-radius:5px;margin-top:10px;}
+.safe-badge.ok{background:var(--green-bg);color:var(--green);}
+.safe-badge.warn{background:var(--amber-bg);color:var(--amber);}
+.chart-wrap{position:relative;width:100%;height:280px;}
+.chart-legend{display:flex;gap:24px;margin-top:10px;font-size:12px;color:#7b8099;font-family:'DM Mono',monospace;}
+.chart-legend span{display:flex;align-items:center;gap:7px;}
+.lgross{width:22px;height:3px;background:#4a8fff;border-radius:2px;display:inline-block;}
+.lusable{width:22px;height:3px;background:#1dc9a4;border-radius:2px;display:inline-block;}
+.forex-chart-wrap{position:relative;width:100%;height:200px;}
+.scenario-section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px 20px;}
+.scenario-subtitle{font-size:11px;color:var(--dim);margin-top:3px;margin-bottom:14px;}
+.scenario-presets{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
+.preset-btn{font-size:10px;padding:4px 10px;border-radius:4px;cursor:pointer;background:rgba(255,255,255,.04);border:1px solid var(--border2);color:var(--muted);font-family:var(--mono);transition:all .15s;}
+.preset-btn:hover{background:rgba(255,255,255,.08);color:var(--text);}
+.preset-btn.active{border-color:var(--teal);color:var(--teal);background:rgba(29,201,164,.08);}
+.slider-wrap{display:flex;align-items:center;gap:12px;margin-bottom:18px;}
+.slider-label{font-size:11px;color:var(--muted);white-space:nowrap;}
+.rupee-slider{flex:1;-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;outline:none;cursor:pointer;background:linear-gradient(to right,var(--green) 0%,var(--amber) 50%,var(--red) 100%);}
+.rupee-slider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--text);border:2px solid var(--teal);cursor:pointer;box-shadow:0 0 6px rgba(29,201,164,.4);}
+.rupee-slider::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--text);border:2px solid var(--teal);cursor:pointer;}
+.slider-val{font-family:var(--mono);font-size:15px;font-weight:500;color:var(--text);min-width:60px;text-align:right;}
+.sc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
+.sc-card{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;padding:12px 14px;text-align:center;}
+.sc-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
+.sc-value{font-family:var(--mono);font-size:18px;font-weight:500;margin-bottom:3px;}
+.sc-sub{font-size:10px;color:var(--dim);}
+.sc-verdict{border-radius:8px;padding:12px 16px;font-size:12px;line-height:1.65;}
+.sc-verdict.safe{background:var(--green-bg);border:1px solid rgba(34,200,122,.2);color:#a0f0c8;}
+.sc-verdict.caution{background:var(--amber-bg);border:1px solid rgba(245,166,35,.2);color:#f5cc80;}
+.sc-verdict.danger{background:var(--red-bg);border:1px solid rgba(240,90,90,.2);color:#f5a0a0;}
+.analyst-note{background:rgba(245,166,35,.06);border:1px solid rgba(245,166,35,.2);border-left:3px solid var(--amber);border-radius:8px;padding:14px 16px;}
+.analyst-title{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--amber);margin-bottom:8px;font-weight:500;}
+.analyst-body{font-size:12px;color:#c8bfa0;line-height:1.65;}
+.analyst-body strong{color:var(--amber);font-weight:500;}
+.error-banner{background:var(--red-bg);border:1px solid rgba(240,90,90,.2);border-radius:6px;padding:8px 12px;font-size:11px;color:var(--red);margin-bottom:4px;display:none;}
+.news-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.news-title{font-size:12px;font-weight:500;display:flex;align-items:center;gap:6px;}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--red);animation:pulse 1.5s infinite;}
+.news-updated{font-family:var(--mono);font-size:10px;color:var(--dim);}
+.news-countdown{font-family:var(--mono);font-size:10px;color:rgba(29,201,164,.6);}
+.news-filters{display:flex;gap:6px;padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;}
+.filter-btn{font-size:10px;padding:3px 10px;border-radius:20px;cursor:pointer;background:transparent;border:1px solid var(--border2);color:var(--muted);transition:all .15s;}
+.filter-btn.active{color:var(--text);border-color:var(--teal);background:rgba(29,201,164,.08);}
+.news-feed{overflow-y:auto;flex:1;}
+.news-item{padding:11px 16px;border-bottom:1px solid var(--border);transition:background .12s;}
+.news-item:hover{background:rgba(255,255,255,.02);}
+.news-item:last-child{border-bottom:none;}
+.news-tag{display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:500;letter-spacing:.05em;padding:2px 7px;border-radius:3px;margin-bottom:5px;text-transform:uppercase;}
+.news-tag.pos{background:var(--green-bg);color:var(--green);}
+.news-tag.neg{background:var(--red-bg);color:var(--red);}
+.news-tag.neu{background:rgba(255,255,255,.05);color:var(--muted);}
+.news-text{font-size:12px;color:var(--text);line-height:1.55;margin-bottom:4px;}
+.news-meta{font-size:10px;color:var(--dim);display:flex;gap:8px;flex-wrap:wrap;}
+.news-cat{background:rgba(255,255,255,.04);padding:1px 5px;border-radius:2px;}
+.news-loading{display:flex;align-items:center;justify-content:center;gap:8px;padding:20px;color:var(--muted);font-size:12px;}
+.news-loading svg{animation:spin .8s linear infinite;}
+.note{font-size:10px;color:var(--dim);padding:10px 16px;border-top:1px solid var(--border);flex-shrink:0;line-height:1.5;}
+@media(max-width:900px){.main{grid-template-columns:1fr;height:auto;overflow:visible;}.right{border-left:none;border-top:1px solid var(--border);max-height:500px;}.metric-row{grid-template-columns:repeat(2,1fr);}.hero{flex-direction:column;align-items:flex-start;}.hero-divider{display:none;}.hero-value{font-size:38px;}.sc-grid{grid-template-columns:repeat(2,1fr);}}
 </style>
 </head>
 <body>
-
 <div class="top-bar">
   <div class="logo">
     <div class="logo-dot"></div>
-    <div>
-      <div class="logo-text">RBI FOREX TRACKER</div>
-      <div class="logo-sub">True usable reserves · Weekly WSS data</div>
-    </div>
+    <div><div class="logo-text">RBI FOREX TRACKER</div><div class="logo-sub">True usable reserves &middot; Weekly WSS data</div></div>
   </div>
-  <div class="top-right">
+  <div style="display:flex;align-items:center;gap:12px;">
     <span class="as-of" id="asOf">Loading...</span>
     <button class="refresh-btn" id="refreshBtn" onclick="refreshAll()">
-      <svg id="refreshIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/>
-      </svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg>
       Refresh
     </button>
   </div>
 </div>
-
 <div class="main">
   <div class="left">
     <div class="error-banner" id="errorBanner"></div>
-
-    <!-- Hero: true usable + import cover prominently at top -->
     <div class="hero">
       <div class="hero-left">
         <div class="hero-eyebrow">True usable forex reserves</div>
-        <div class="hero-value" id="heroUsable">—</div>
-        <div class="hero-label">Gross less gold · fwd book · SDRs &nbsp;|&nbsp; <span id="heroWeek">Loading...</span></div>
+        <div class="hero-value" id="heroUsable">--</div>
+        <div class="hero-label">Gross less gold &middot; fwd book &middot; SDRs &nbsp;|&nbsp; <span id="heroWeek">Loading...</span></div>
       </div>
       <div class="hero-divider"></div>
       <div class="hero-cover">
         <div class="hero-cover-label">True import cover</div>
-        <div class="hero-cover-value" id="heroCover">—</div>
+        <div class="hero-cover-value" id="heroCover">--</div>
         <div class="hero-cover-label">months</div>
-        <div class="hero-cover-badge" id="heroCoverBadge">—</div>
+        <div class="hero-cover-badge ok" id="heroCoverBadge">--</div>
       </div>
       <div class="hero-divider"></div>
       <div class="hero-right">
-        <div class="hero-stat">
-          <div class="hero-stat-val" id="heroGross">—</div>
-          <div class="hero-stat-lbl">Gross reserves</div>
-        </div>
-        <div class="hero-stat">
-          <div class="hero-stat-val" id="heroGrossChg">—</div>
-          <div class="hero-stat-lbl">Change vs prev week</div>
-        </div>
-        <div class="hero-stat">
-          <div class="hero-stat-val" id="heroSpot">—</div>
-          <div class="hero-stat-lbl">USD / INR spot</div>
-        </div>
+        <div class="hero-stat"><div class="hero-stat-val" id="heroGross">--</div><div class="hero-stat-lbl">Gross reserves</div></div>
+        <div class="hero-stat"><div class="hero-stat-val" id="heroGrossChg">--</div><div class="hero-stat-lbl">Change vs prev week</div></div>
+        <div class="hero-stat"><div class="hero-stat-val" id="heroSpot">--</div><div class="hero-stat-lbl">USD / INR spot</div></div>
       </div>
     </div>
-
     <div class="metric-row">
-      <div class="card">
-        <div class="card-label">Gross reserves</div>
-        <div class="card-value" id="mGross">—</div>
-        <div class="card-sub" id="mGrossChg">—</div>
-      </div>
-      <div class="card">
-        <div class="card-label">Less: gold</div>
-        <div class="card-value" id="mGold">—</div>
-        <div class="card-sub">Illiquid in a crisis</div>
-      </div>
-      <div class="card warn">
-        <div class="card-label">Less: fwd book</div>
-        <div class="card-value" id="mFwd">—</div>
-        <div class="card-sub" id="mFwdAsOf">—</div>
-      </div>
-      <div class="card usable">
-        <div class="card-label">True usable</div>
-        <div class="card-value" id="mUsable">—</div>
-        <div class="card-sub">Excl. SDRs / IMF</div>
-      </div>
+      <div class="card"><div class="card-label">Gross reserves</div><div class="card-value" id="mGross">--</div><div class="card-sub" id="mGrossChg">--</div></div>
+      <div class="card"><div class="card-label">Less: gold</div><div class="card-value" id="mGold">--</div><div class="card-sub">Illiquid in a crisis</div></div>
+      <div class="card warn"><div class="card-label">Less: fwd book</div><div class="card-value" id="mFwd">--</div><div class="card-sub" id="mFwdAsOf">--</div></div>
+      <div class="card usable"><div class="card-label">True usable</div><div class="card-value" id="mUsable">--</div><div class="card-sub">Excl. SDRs / IMF</div></div>
     </div>
-
-    <div class="section">
-      <div class="section-title">Breakdown — gross to usable</div>
-      <div id="waterfallEl"></div>
-    </div>
-
+    <div class="section"><div class="section-title">Breakdown - gross to usable</div><div id="waterfallEl"></div></div>
     <div class="section">
       <div class="section-title">Import cover (months of goods imports)</div>
       <div class="cover-grid" id="coverGrid"></div>
       <div id="safeBadge"></div>
     </div>
-
     <div class="section">
       <div class="section-title">Usable reserves trend (last 8 weeks)</div>
-      <div class="chart-wrap">
-        <canvas id="trendChart" role="img" aria-label="Weekly trend of RBI true usable forex reserves">Reserve trend data loading.</canvas>
-      </div>
+      <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+      <div class="chart-legend"><span><span class="lgross"></span> Gross (dashed)</span><span><span class="lusable"></span> True usable</span></div>
     </div>
-
     <div class="spot-row">
-      <div class="card spot">
-        <div class="card-label">USD / INR spot rate</div>
-        <div class="card-value" id="spotRate">—</div>
-        <div class="card-sub" id="spotChg">—</div>
-      </div>
-      <div class="card">
-        <div class="card-label">52-week range</div>
-        <div class="card-value" id="spotRange">—</div>
-        <div class="card-sub" id="spotUpdated">—</div>
-      </div>
+      <div class="card spot"><div class="card-label">USD / INR spot rate</div><div class="card-value" id="spotRate">--</div><div class="card-sub" id="spotChg">--</div></div>
+      <div class="card"><div class="card-label">52-week range</div><div class="card-value" id="spotRange">--</div><div class="card-sub" id="spotUpdated">--</div></div>
     </div>
-
     <div class="section">
-      <div class="section-title">USD / INR spot rate — intraday</div>
-      <div class="forex-chart-wrap">
-        <canvas id="forexChart" role="img" aria-label="USD/INR intraday spot rate chart">Spot rate data loading.</canvas>
-      </div>
-      <div id="forexLegend" style="margin-top:10px;font-size:11px;color:#4a5068;font-family:'DM Mono',monospace;">
-        Sourced from Yahoo Finance (15-min delayed). Higher = weaker rupee.
-      </div>
+      <div class="section-title">USD / INR spot rate - intraday</div>
+      <div class="forex-chart-wrap"><canvas id="forexChart"></canvas></div>
+      <div style="margin-top:10px;font-size:11px;color:#4a5068;font-family:'DM Mono',monospace;">Yahoo Finance (15-min delayed). Higher = weaker rupee.</div>
     </div>
-
     <div class="scenario-section">
-      <div class="scenario-header">
-        <div>
-          <div class="scenario-title">🔢 Rupee scenario analyser</div>
-          <div class="scenario-subtitle">Drag to model impact of different USD/INR levels on reserves &amp; import cover</div>
-        </div>
-      </div>
-      <div class="scenario-presets" id="scenarioPresets">
-        <button class="preset-btn" onclick="setScenario(83.9)">₹83.9 (52w low)</button>
-        <button class="preset-btn" onclick="setScenario(89.0)">₹89 (pre-crisis)</button>
-        <button class="preset-btn active" onclick="setScenario(94.85)">₹94.85 (current)</button>
-        <button class="preset-btn" onclick="setScenario(97.0)">₹97 (stress)</button>
-        <button class="preset-btn" onclick="setScenario(100.0)">₹100 (severe)</button>
-        <button class="preset-btn" onclick="setScenario(105.0)">₹105 (crisis)</button>
+      <div class="section-title">Rupee scenario analyser</div>
+      <div class="scenario-subtitle">Drag to model impact of different USD/INR levels on reserves and import cover</div>
+      <div class="scenario-presets">
+        <button class="preset-btn" id="pre1" onclick="setScenario(83.9)">Rs.83.9 (52w low)</button>
+        <button class="preset-btn" id="pre2" onclick="setScenario(89.0)">Rs.89 (pre-crisis)</button>
+        <button class="preset-btn active" id="pre3" onclick="setScenario(94.85)">Rs.94.85 (current)</button>
+        <button class="preset-btn" id="pre4" onclick="setScenario(97.0)">Rs.97 (stress)</button>
+        <button class="preset-btn" id="pre5" onclick="setScenario(100.0)">Rs.100 (severe)</button>
+        <button class="preset-btn" id="pre6" onclick="setScenario(105.0)">Rs.105 (crisis)</button>
       </div>
       <div class="slider-wrap">
-        <span class="slider-label">₹/USD</span>
-        <input type="range" class="rupee-slider" id="rupeeSlider"
-          min="80" max="110" step="0.5" value="94.85"
-          oninput="updateScenario(this.value)">
-        <span class="slider-val" id="sliderVal">₹94.85</span>
+        <span class="slider-label">Rs./USD</span>
+        <input type="range" class="rupee-slider" id="rupeeSlider" min="80" max="110" step="0.5" value="94.85" oninput="updateScenario(this.value)">
+        <span class="slider-val" id="sliderVal">Rs.94.85</span>
       </div>
-      <div class="scenario-grid" id="scenarioGrid">
-        <div class="scenario-card">
-          <div class="scenario-card-label">Rupee depreciation</div>
-          <div class="scenario-card-value" id="scDepreciation">—</div>
-          <div class="scenario-card-sub">vs ₹83.9 (52w low)</div>
-        </div>
-        <div class="scenario-card">
-          <div class="scenario-card-label">Extra import cost</div>
-          <div class="scenario-card-value" id="scImportCost">—</div>
-          <div class="scenario-card-sub">annual oil bill add-on</div>
-        </div>
-        <div class="scenario-card">
-          <div class="scenario-card-label">Import cover</div>
-          <div class="scenario-card-value" id="scImportCover">—</div>
-          <div class="scenario-card-sub">months (usable reserves)</div>
-        </div>
-        <div class="scenario-card">
-          <div class="scenario-card-label">Usable reserves</div>
-          <div class="scenario-card-value" id="scUsable">—</div>
-          <div class="scenario-card-sub">real-terms USD value</div>
-        </div>
-        <div class="scenario-card">
-          <div class="scenario-card-label">RBI fwd book (INR)</div>
-          <div class="scenario-card-value" id="scFwdINR">—</div>
-          <div class="scenario-card-sub">obligation in rupees</div>
-        </div>
-        <div class="scenario-card">
-          <div class="scenario-card-label">Status</div>
-          <div class="scenario-card-value" id="scStatus">—</div>
-          <div class="scenario-card-sub" id="scStatusSub">—</div>
-        </div>
+      <div class="sc-grid">
+        <div class="sc-card"><div class="sc-label">Depreciation</div><div class="sc-value" id="scDepreciation">--</div><div class="sc-sub">vs Rs.83.9 (52w low)</div></div>
+        <div class="sc-card"><div class="sc-label">Extra oil import cost</div><div class="sc-value" id="scImportCost">--</div><div class="sc-sub">annual add-on (USD)</div></div>
+        <div class="sc-card"><div class="sc-label">Import cover</div><div class="sc-value" id="scImportCover">--</div><div class="sc-sub">months (usable reserves)</div></div>
+        <div class="sc-card"><div class="sc-label">Usable reserves</div><div class="sc-value" id="scUsable">--</div><div class="sc-sub">real-terms USD value</div></div>
+        <div class="sc-card"><div class="sc-label">Fwd book (INR)</div><div class="sc-value" id="scFwdINR">--</div><div class="sc-sub">obligation in rupees</div></div>
+        <div class="sc-card"><div class="sc-label">Status</div><div class="sc-value" id="scStatus">--</div><div class="sc-sub" id="scStatusSub">--</div></div>
       </div>
-      <div class="scenario-verdict" id="scVerdict"></div>
+      <div class="sc-verdict safe" id="scVerdict">Loading scenario...</div>
     </div>
-
     <div class="analyst-note">
-      <div class="analyst-title">⚠ Analyst note — forward book unwind: a one-time effect</div>
+      <div class="analyst-title">Analyst note - forward book unwind: a one-time effect</div>
       <div class="analyst-body">
-        The RBI's $100M net open position cap forced banks to unwind an estimated <strong>$30–40B</strong> in long-dollar positions, temporarily strengthening the rupee and slowing reserve depletion. <strong>This is a one-time effect.</strong>
-        <br><br>
-        Going forward, every market participant — corporates, importers, fund managers, and households — will rationally seek to build their own dollar buffers given the rupee's trajectory. This structural shift in dollar demand means the RBI cannot rely on regulatory squeezes to defend the currency repeatedly. <strong>Each successive intervention tool loses potency once the market adapts.</strong>
-        <br><br>
-        With the forward book at a record <strong>$103B</strong>, the RBI faces a compounding problem: future contract maturities require dollar purchases that will themselves pressure the rupee, creating a feedback loop that only a fundamental improvement in the current account or a sustained capital inflow reversal can break.
+        The RBI cap forced banks to unwind an estimated <strong>$30-40B</strong> in long-dollar positions, temporarily strengthening the rupee. <strong>This is a one-time effect.</strong><br><br>
+        Going forward, every market participant will rationally build their own dollar buffers, creating structural dollar demand. <strong>Each successive RBI intervention tool loses potency once the market adapts.</strong><br><br>
+        With the forward book at a record <strong>$103B</strong>, future contract maturities require dollar purchases that will themselves pressure the rupee, creating a feedback loop only a current account improvement or capital inflow reversal can break.
       </div>
     </div>
   </div>
-
   <div class="right">
     <div class="news-header">
       <div class="news-title"><div class="live-dot"></div> RBI / GOI forex impact</div>
       <div style="display:flex;align-items:center;gap:8px;">
-        <span class="news-updated" id="newsUpdated">—</span>
-        <span class="news-updated" id="newsCountdown" style="color:rgba(29,201,164,0.6);">—</span>
+        <span class="news-updated" id="newsUpdated">--</span>
+        <span class="news-countdown" id="newsCountdown"></span>
       </div>
     </div>
     <div class="news-filters">
-      <button class="filter-btn active" data-filter="all" onclick="filterNews('all',this)">All</button>
-      <button class="filter-btn" data-filter="pos" onclick="filterNews('pos',this)">▲ Positive</button>
-      <button class="filter-btn" data-filter="neg" onclick="filterNews('neg',this)">▼ Negative</button>
-      <button class="filter-btn" data-filter="intervention" onclick="filterNews('intervention',this)">Intervention</button>
-      <button class="filter-btn" data-filter="policy" onclick="filterNews('policy',this)">Policy</button>
-      <button class="filter-btn" data-filter="flows" onclick="filterNews('flows',this)">Flows</button>
+      <button class="filter-btn active" onclick="filterNews('all',this)">All</button>
+      <button class="filter-btn" onclick="filterNews('pos',this)">Positive</button>
+      <button class="filter-btn" onclick="filterNews('neg',this)">Negative</button>
+      <button class="filter-btn" onclick="filterNews('intervention',this)">Intervention</button>
+      <button class="filter-btn" onclick="filterNews('policy',this)">Policy</button>
+      <button class="filter-btn" onclick="filterNews('flows',this)">Flows</button>
     </div>
     <div class="news-loading" id="newsLoading">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg>
       Loading news...
     </div>
-    <div class="news-feed" id="newsFeed" style="display:none"></div>
-    <div class="note">Impact assessed by AI. Positive = helps forex kitty, Negative = drains it. Data from RBI WSS &amp; public sources. Not investment advice.</div>
+    <div class="news-feed" id="newsFeed" style="display:none;"></div>
+    <div class="note">Live RSS from ET, BS, Mint, RBI. Positive = helps forex kitty. Negative = drains it. Not investment advice.</div>
   </div>
 </div>
-
 <script>
-const API_BASE = window.location.origin;
-let allNewsItems = [];
-let trendChart = null;
-let forexChart = null;
-let spotHistory = [];
-let lastSpotFetch = 0;
-
-// Simulated historical trend (last 8 weeks) — backend will supply real data in future
-const TREND_HISTORY = [
-  { week: 'Mar 7',  gross: 728.5, usable: 507.8 },
-  { week: 'Mar 14', gross: 725.1, usable: 504.1 },
-  { week: 'Mar 21', gross: 719.4, usable: 498.3 },
-  { week: 'Mar 28', gross: 714.2, usable: 493.0 },
-  { week: 'Apr 4',  gross: 708.0, usable: 486.8 },
-  { week: 'Apr 11', gross: 703.3, usable: 481.2 },
-  { week: 'Apr 24', gross: 698.5, usable: 476.5 },
-  { week: 'May 1',  gross: 690.7, usable: 438.0 },
+var API_BASE = window.location.origin;
+var allNewsItems = [];
+var trendChart = null;
+var forexChart = null;
+var scenarioData = {usable:438,forwardBook:103,monthlyImports:62};
+var newsNextRefresh = Date.now() + 15*60*1000;
+var HISTORY = [
+  {week:'Mar 7', gross:728.5,usable:507.8},{week:'Mar 14',gross:725.1,usable:504.1},
+  {week:'Mar 21',gross:719.4,usable:498.3},{week:'Mar 28',gross:714.2,usable:493.0},
+  {week:'Apr 4', gross:708.0,usable:486.8},{week:'Apr 11',gross:703.3,usable:481.2},
+  {week:'Apr 24',gross:698.5,usable:476.5},{week:'May 1', gross:690.7,usable:438.0}
 ];
 
-async function fetchAll(force = false) {
-  const url = `${API_BASE}/api/all${force ? '?refresh=true' : ''}`;
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`Server returned ${r.status}`);
-  return r.json();
+function showError(msg,type){
+  var el=document.getElementById('errorBanner');
+  el.textContent=(type==='warn'?'Note: ':'Error: ')+msg;
+  el.style.display='block';
+  el.style.background=type==='warn'?'var(--amber-bg)':'var(--red-bg)';
+  el.style.color=type==='warn'?'var(--amber)':'var(--red)';
 }
 
-function renderMetrics(d) {
-  document.getElementById('mGross').textContent = `${d.gross}B`;
-  document.getElementById('mGold').textContent  = `${d.gold}B`;
-  document.getElementById('mFwd').textContent   = `${d.forwardBook}B`;
-  document.getElementById('mUsable').textContent= `${d.usable}B`;
-  document.getElementById('mFwdAsOf').textContent = `As of ${d.forwardBookAsOf}`;
-  document.getElementById('asOf').textContent   = `Week ending ${d.weekEnding}`;
-
-  const chg = d.prevGross ? +(d.gross - d.prevGross).toFixed(1) : null;
-  const chgEl = document.getElementById('mGrossChg');
-  if (chg !== null) {
-    chgEl.textContent = `${chg >= 0 ? '▲' : '▼'} ${Math.abs(chg)}B vs prev week`;
-    chgEl.className = 'card-sub ' + (chg >= 0 ? 'pos' : 'neg');
-  }
-
-  // Update hero banner
-  document.getElementById('heroUsable').textContent = `${d.usable}B`;
-  document.getElementById('heroWeek').textContent = `Week ending ${d.weekEnding}`;
-  document.getElementById('heroGross').textContent = `${d.gross}B`;
-  document.getElementById('heroCover').textContent = d.usableImportCover || '—';
-  const coverOk = d.usableImportCover >= 6;
-  const badge = document.getElementById('heroCoverBadge');
-  badge.textContent = coverOk ? '✓ Above safe threshold' : '⚠ Below safe threshold';
-  badge.className = 'hero-cover-badge ' + (coverOk ? 'ok' : 'warn');
-  if (chg !== null) {
-    const hChg = document.getElementById('heroGrossChg');
-    hChg.textContent = `${chg >= 0 ? '▲ +' : '▼ '}${Math.abs(chg)}B`;
-    hChg.className = 'hero-stat-val ' + (chg >= 0 ? 'pos' : 'neg');
-  }
-
-  if (d.note) showError(d.note, 'warn');
-  // Feed live data into scenario analyser
-  scenarioReserveData = d;
-  const currentSpot = parseFloat(document.getElementById('spotRate').textContent) || 94.85;
-  updateScenario(document.getElementById('rupeeSlider').value || currentSpot);
+function renderMetrics(d){
+  document.getElementById('mGross').textContent='$'+d.gross+'B';
+  document.getElementById('mGold').textContent='$'+d.gold+'B';
+  document.getElementById('mFwd').textContent='$'+d.forwardBook+'B';
+  document.getElementById('mUsable').textContent='$'+d.usable+'B';
+  document.getElementById('mFwdAsOf').textContent='As of '+d.forwardBookAsOf;
+  document.getElementById('asOf').textContent='Week ending '+d.weekEnding;
+  var chg=d.prevGross?+(d.gross-d.prevGross).toFixed(1):null;
+  var cel=document.getElementById('mGrossChg');
+  if(chg!==null){cel.textContent=(chg>=0?'up ':'down ')+'$'+Math.abs(chg)+'B vs prev week';cel.className='card-sub '+(chg>=0?'pos':'neg');}
+  document.getElementById('heroUsable').textContent='$'+d.usable+'B';
+  document.getElementById('heroWeek').textContent='Week ending '+d.weekEnding;
+  document.getElementById('heroGross').textContent='$'+d.gross+'B';
+  document.getElementById('heroCover').textContent=d.usableImportCover||'--';
+  var ok=d.usableImportCover>=6;
+  var b=document.getElementById('heroCoverBadge');
+  b.textContent=ok?'Above safe threshold':'Below safe threshold';
+  b.className='hero-cover-badge '+(ok?'ok':'warn');
+  if(chg!==null){var hc=document.getElementById('heroGrossChg');hc.textContent=(chg>=0?'+':'')+'$'+chg+'B';hc.className='hero-stat-val '+(chg>=0?'pos':'neg');}
+  scenarioData={usable:d.usable,forwardBook:d.forwardBook,monthlyImports:d.monthlyImports};
+  updateScenario(document.getElementById('rupeeSlider').value);
+  if(d.note)showError(d.note,'warn');
 }
 
-function renderWaterfall(d) {
-  const rows = [
-    { label: 'Gross headline', val: d.gross,        cls: 'wf-gross',  sign: ''  },
-    { label: 'Less: gold',     val: d.gold,          cls: 'wf-gold',   sign: '−' },
-    { label: 'Less: fwd book', val: d.forwardBook,   cls: 'wf-fwd',    sign: '−' },
-    { label: 'Less: SDR/IMF',  val: d.sdr,           cls: 'wf-sdr',    sign: '−' },
-    { label: '= True usable',  val: d.usable,        cls: 'wf-usable', sign: '=' },
+function renderWaterfall(d){
+  var rows=[
+    {label:'Gross headline',val:d.gross,cls:'wf-gross',sign:''},
+    {label:'Less: gold',val:d.gold,cls:'wf-gold',sign:'-'},
+    {label:'Less: fwd book',val:d.forwardBook,cls:'wf-fwd',sign:'-'},
+    {label:'Less: SDR/IMF',val:d.sdr,cls:'wf-sdr',sign:'-'},
+    {label:'= True usable',val:d.usable,cls:'wf-usable',sign:'='}
   ];
-  const max = d.gross;
-  document.getElementById('waterfallEl').innerHTML = rows.map(r => `
-    <div class="wf-row">
-      <div class="wf-label">${r.label}</div>
-      <div class="wf-sign">${r.sign}</div>
-      <div class="wf-track">
-        <div class="wf-fill ${r.cls}" style="width:${Math.round((r.val/max)*100)}%">
-          <span>$${r.val}B</span>
-        </div>
-      </div>
-    </div>`).join('');
-}
-
-function renderImportCover(d) {
-  const safe = 6;
-  const bars = [
-    { label: 'Gross cover', m: d.grossImportCover, color: '#4a8fff', tc: '#0a1a3a' },
-    { label: 'Usable cover', m: d.usableImportCover, color: '#1dc9a4', tc: '#002a1a' },
-    { label: 'Safe floor', m: safe, color: '#f5a623', tc: '#2a1500' },
-  ];
-  const maxM = Math.max(...bars.map(b => b.m)) + 1;
-  document.getElementById('coverGrid').innerHTML = bars.map(b => {
-    const h = Math.round((b.m / maxM) * 66);
-    return `<div class="cover-item">
-      <div class="cover-bar-wrap">
-        <div class="cover-bar" style="height:${h}px;background:${b.color};">
-          <span style="color:${b.tc}">${b.m}</span>
-        </div>
-      </div>
-      <div class="cover-lbl">${b.label}</div>
-    </div>`;
+  document.getElementById('waterfallEl').innerHTML=rows.map(function(r){
+    return '<div class="wf-row"><div class="wf-label">'+r.label+'</div><div class="wf-sign">'+r.sign+'</div><div class="wf-track"><div class="wf-fill '+r.cls+'" style="width:'+Math.round(r.val/d.gross*100)+'%"><span>$'+r.val+'B</span></div></div></div>';
   }).join('');
-
-  const ok = d.usableImportCover >= safe;
-  document.getElementById('safeBadge').innerHTML = `
-    <div class="safe-badge ${ok ? 'ok' : 'warn'}">
-      ${ok ? '✓' : '⚠'} Usable cover ${d.usableImportCover} months — ${ok ? 'above' : 'below'} 6-month safety threshold
-    </div>`;
 }
 
-function renderTrend(data) {
-  const latest = { week: 'May 1', gross: data.gross, usable: data.usable };
-  const history = [...TREND_HISTORY.slice(0, -1), latest];
+function renderImportCover(d){
+  var safe=6;
+  var bars=[{label:'Gross cover',m:d.grossImportCover,color:'#4a8fff',tc:'#0a1a3a'},{label:'Usable cover',m:d.usableImportCover,color:'#1dc9a4',tc:'#002a1a'},{label:'Safe floor',m:safe,color:'#f5a623',tc:'#2a1500'}];
+  var maxM=Math.max.apply(null,bars.map(function(b){return b.m;}))+1;
+  document.getElementById('coverGrid').innerHTML=bars.map(function(b){
+    var h=Math.round(b.m/maxM*66);
+    return '<div class="cover-item"><div class="cover-bar-wrap"><div class="cover-bar" style="height:'+h+'px;background:'+b.color+';"><span style="color:'+b.tc+'">'+b.m+'</span></div></div><div class="cover-lbl">'+b.label+'</div></div>';
+  }).join('');
+  var ok=d.usableImportCover>=safe;
+  document.getElementById('safeBadge').innerHTML='<div class="safe-badge '+(ok?'ok':'warn')+'">'+(ok?'Usable cover '+d.usableImportCover+' months - above 6-month threshold':'Usable cover '+d.usableImportCover+' months - below 6-month threshold')+'</div>';
+}
 
-  const labels = history.map(h => h.week);
-  const grossData = history.map(h => h.gross);
-  const usableData = history.map(h => h.usable);
-
-  if (trendChart) trendChart.destroy();
-
-  // Remove old legend if exists
-  const oldLegend = document.getElementById('chartLegend');
-  if (oldLegend) oldLegend.remove();
-
-  // Y axis range: tight around the data so movement is visible
-  const allVals = [...grossData, ...usableData];
-  const yMin = Math.floor((Math.min(...allVals) - 10) / 10) * 10;
-  const yMax = Math.ceil((Math.max(...allVals) + 10) / 10) * 10;
-
-  trendChart = new Chart(document.getElementById('trendChart'), {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'Gross reserves',
-          data: grossData,
-          borderColor: '#4a8fff',
-          backgroundColor: 'rgba(74,143,255,0.0)',
-          borderWidth: 2.5,
-          pointRadius: 5,
-          pointHoverRadius: 7,
-          pointBackgroundColor: '#4a8fff',
-          pointBorderColor: '#0f1117',
-          pointBorderWidth: 2,
-          tension: 0.35,
-          fill: false,
-          borderDash: [6, 3],
-          datalabels: { display: false },
-        },
-        {
-          label: 'Usable reserves',
-          data: usableData,
-          borderColor: '#1dc9a4',
-          backgroundColor: 'rgba(29,201,164,0.12)',
-          borderWidth: 2.5,
-          pointRadius: 5,
-          pointHoverRadius: 7,
-          pointBackgroundColor: '#1dc9a4',
-          pointBorderColor: '#0f1117',
-          pointBorderWidth: 2,
-          tension: 0.35,
-          fill: true,
-        },
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#1e2336',
-          borderColor: 'rgba(255,255,255,0.15)',
-          borderWidth: 1,
-          padding: 12,
-          titleColor: '#9ba3bf',
-          titleFont: { family: 'DM Mono', size: 11 },
-          bodyColor: '#e8eaf0',
-          bodyFont: { family: 'DM Mono', size: 12 },
-          callbacks: {
-            title: ctx => 'Week of ' + ctx[0].label,
-            label: ctx => {
-              const label = ctx.dataset.label;
-              const val = ctx.parsed.y;
-              const prev = ctx.dataIndex > 0 ? ctx.dataset.data[ctx.dataIndex - 1] : null;
-              const chg = prev !== null ? (val - prev).toFixed(1) : null;
-              const arrow = chg === null ? '' : chg >= 0 ? '  ▲ +$' + chg + 'B' : '  ▼ $' + chg + 'B';
-              return ' ' + label + ': $' + val + 'B' + arrow;
-            }
+function renderTrend(d){
+  var latest={week:'May 1',gross:d.gross,usable:d.usable};
+  var hist=HISTORY.slice(0,-1).concat([latest]);
+  var labels=hist.map(function(h){return h.week;});
+  var gd=hist.map(function(h){return h.gross;});
+  var ud=hist.map(function(h){return h.usable;});
+  if(trendChart)trendChart.destroy();
+  var all=gd.concat(ud);
+  var yMin=Math.floor((Math.min.apply(null,all)-10)/10)*10;
+  var yMax=Math.ceil((Math.max.apply(null,all)+10)/10)*10;
+  trendChart=new Chart(document.getElementById('trendChart'),{
+    type:'line',
+    data:{labels:labels,datasets:[
+      {label:'Gross',data:gd,borderColor:'#4a8fff',backgroundColor:'transparent',borderWidth:2,borderDash:[6,3],pointRadius:4,pointBackgroundColor:'#4a8fff',pointBorderColor:'#0f1117',pointBorderWidth:2,tension:0.35},
+      {label:'Usable',data:ud,borderColor:'#1dc9a4',backgroundColor:'rgba(29,201,164,0.1)',borderWidth:2.5,pointRadius:4,pointBackgroundColor:'#1dc9a4',pointBorderColor:'#0f1117',pointBorderWidth:2,tension:0.35,fill:true}
+    ]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:'#1e2336',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,padding:12,
+          titleColor:'#9ba3bf',titleFont:{family:'DM Mono',size:11},
+          bodyColor:'#e8eaf0',bodyFont:{family:'DM Mono',size:12},
+          callbacks:{
+            title:function(c){return 'Week of '+c[0].label;},
+            label:function(c){var p=c.dataIndex>0?c.dataset.data[c.dataIndex-1]:null;var ch=p!==null?(c.parsed.y-p).toFixed(1):null;var a=ch===null?'':(ch>=0?' up +$':' down $')+Math.abs(ch)+'B';return ' '+c.dataset.label+': $'+c.parsed.y+'B'+a;}
           }
         }
       },
-      scales: {
-        x: {
-          grid: { color: 'rgba(255,255,255,0.05)', drawTicks: false },
-          border: { color: 'rgba(255,255,255,0.08)' },
-          ticks: {
-            color: '#7b8099',
-            font: { family: 'DM Mono', size: 11 },
-            padding: 8,
-            maxRotation: 0,
-          }
-        },
-        y: {
-          min: yMin,
-          max: yMax,
-          grid: { color: 'rgba(255,255,255,0.05)', drawTicks: false },
-          border: { color: 'rgba(255,255,255,0.08)', dash: [4,4] },
-          ticks: {
-            color: '#7b8099',
-            font: { family: 'DM Mono', size: 11 },
-            padding: 10,
-            callback: v => '$' + v + 'B',
-            maxTicksLimit: 6,
-          }
-        }
+      scales:{
+        x:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#7b8099',font:{family:'DM Mono',size:11},padding:8,maxRotation:0}},
+        y:{min:yMin,max:yMax,grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#7b8099',font:{family:'DM Mono',size:11},padding:10,callback:function(v){return '$'+v+'B';},maxTicksLimit:6}}
       }
     }
   });
-
-  // Add legend below chart
-  const legendHtml = '<div id="chartLegend" class="chart-legend">'
-    + '<span><span class="legend-gross"></span> Gross reserves (dashed)</span>'
-    + '<span><span class="legend-usable"></span> True usable reserves</span>'
-    + '<span style="margin-left:auto;font-size:11px;color:#4a5068;">Hover for weekly change</span>'
-    + '</div>';
-  document.querySelector('.chart-wrap').insertAdjacentHTML('afterend', legendHtml);
 }
 
-function renderNews(items) {
-  allNewsItems = items;
-  applyNewsFilter(document.querySelector('.filter-btn.active')?.dataset.filter || 'all');
-  document.getElementById('newsLoading').style.display = 'none';
-  document.getElementById('newsFeed').style.display = 'block';
-  document.getElementById('newsUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  newsNextRefresh = Date.now() + 15 * 60 * 1000;
+function renderSpotMetrics(s){
+  if(!s||!s.current){document.getElementById('spotRate').textContent='N/A';return;}
+  document.getElementById('spotRate').textContent=s.current.toFixed(2);
+  var chg=+(s.current-s.prev).toFixed(4);
+  var pct=+((chg/s.prev)*100).toFixed(2);
+  var ce=document.getElementById('spotChg');
+  ce.textContent=(chg>=0?'up ':'down ')+Math.abs(chg).toFixed(2)+' ('+Math.abs(pct)+'%) today';
+  ce.className='card-sub '+(chg>=0?'neg':'pos');
+  if(s.low52&&s.high52)document.getElementById('spotRange').textContent=s.low52.toFixed(2)+' - '+s.high52.toFixed(2);
+  document.getElementById('spotUpdated').textContent='Updated '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  var hs=document.getElementById('heroSpot');
+  hs.textContent=s.current.toFixed(2);
+  hs.className='hero-stat-val '+(chg>=0?'neg':'pos');
 }
 
-function applyNewsFilter(filter) {
-  const items = filter === 'all' ? allNewsItems
-    : filter === 'pos' || filter === 'neg' ? allNewsItems.filter(n => n.impact === filter)
-    : allNewsItems.filter(n => n.category === filter);
-
-  document.getElementById('newsFeed').innerHTML = items.map(n => `
-    <div class="news-item">
-      <div>
-        <span class="news-tag ${n.impact}">${n.impact === 'pos' ? '▲ Positive' : n.impact === 'neg' ? '▼ Negative' : '● Watch'}</span>
-      </div>
-      <div class="news-text">${n.text}</div>
-      <div class="news-meta">
-        <span>${n.source}</span>
-        <span>·</span>
-        <span>${n.age}</span>
-        ${n.category ? `<span class="news-cat">${n.category}</span>` : ''}
-      </div>
-    </div>`).join('') || '<div style="padding:20px;text-align:center;color:#4a5068;font-size:12px;">No items match this filter</div>';
+function renderForexChart(pts){
+  if(!pts||!pts.length)return;
+  if(forexChart)forexChart.destroy();
+  var vals=pts.map(function(p){return p.val;});
+  var yMin=Math.floor((Math.min.apply(null,vals)-0.2)*10)/10;
+  var yMax=Math.ceil((Math.max.apply(null,vals)+0.2)*10)/10;
+  forexChart=new Chart(document.getElementById('forexChart'),{
+    type:'line',
+    data:{labels:pts.map(function(p){return p.time;}),datasets:[{label:'USD/INR',data:vals,borderColor:'#f05a5a',backgroundColor:'rgba(240,90,90,0.07)',borderWidth:2,pointRadius:0,pointHoverRadius:4,tension:0.3,fill:true}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:'#1e2336',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,padding:10,
+          titleColor:'#9ba3bf',titleFont:{family:'DM Mono',size:11},
+          bodyColor:'#e8eaf0',bodyFont:{family:'DM Mono',size:12},
+          callbacks:{label:function(c){return ' USD/INR: '+c.parsed.y.toFixed(4);}}
+        }
+      },
+      scales:{
+        x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#7b8099',font:{family:'DM Mono',size:10},maxTicksLimit:8,maxRotation:0}},
+        y:{min:yMin,max:yMax,grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#7b8099',font:{family:'DM Mono',size:10},padding:8,callback:function(v){return v.toFixed(2);},maxTicksLimit:5}}
+      }
+    }
+  });
 }
 
-function filterNews(filter, btn) {
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+function renderNews(items){
+  allNewsItems=items;
+  var active=document.querySelector('.filter-btn.active');
+  var filter='all';
+  if(active){var m=active.getAttribute('onclick').match(/'([^']+)'/);if(m)filter=m[1];}
+  applyNewsFilter(filter);
+  document.getElementById('newsLoading').style.display='none';
+  document.getElementById('newsFeed').style.display='block';
+  document.getElementById('newsUpdated').textContent='Updated '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  newsNextRefresh=Date.now()+15*60*1000;
+}
+
+function applyNewsFilter(filter){
+  var items=filter==='all'?allNewsItems:(filter==='pos'||filter==='neg')?allNewsItems.filter(function(n){return n.impact===filter;}):allNewsItems.filter(function(n){return n.category===filter;});
+  if(!items.length){document.getElementById('newsFeed').innerHTML='<div style="padding:20px;text-align:center;color:#4a5068;font-size:12px;">No items match this filter</div>';return;}
+  document.getElementById('newsFeed').innerHTML=items.map(function(n){
+    var tl=n.impact==='pos'?'Positive':n.impact==='neg'?'Negative':'Watch';
+    var cat=n.category?'<span class="news-cat">'+n.category+'</span>':'';
+    return '<div class="news-item"><span class="news-tag '+n.impact+'">'+tl+'</span><div class="news-text">'+n.text+'</div><div class="news-meta"><span>'+n.source+'</span><span>·</span><span>'+n.age+'</span>'+cat+'</div></div>';
+  }).join('');
+}
+
+function filterNews(filter,btn){
+  document.querySelectorAll('.filter-btn').forEach(function(b){b.classList.remove('active');});
   btn.classList.add('active');
   applyNewsFilter(filter);
 }
 
-function showError(msg, type = 'error') {
-  const el = document.getElementById('errorBanner');
-  el.textContent = (type === 'warn' ? '⚠ ' : '✕ ') + msg;
-  el.style.display = 'block';
-  el.style.background = type === 'warn' ? 'var(--amber-bg)' : 'var(--red-bg)';
-  el.style.color = type === 'warn' ? 'var(--amber)' : 'var(--red)';
-}
-
-async function fetchSpotRate() {
-  // Routed through backend to avoid CORS — see /api/spot in server.js
-  try {
-    const r = await fetch(API_BASE + '/api/spot');
-    if (!r.ok) throw new Error('Spot API returned ' + r.status);
-    const data = await r.json();
-    return data;
-  } catch (e) {
-    console.warn('Spot fetch failed:', e.message);
-    return null;
-  }
-}
-
-function renderSpotMetrics(s) {
-  if (!s) { document.getElementById('spotRate').textContent = 'N/A'; return; }
-  document.getElementById('spotRate').textContent = s.current.toFixed(2);
-  const heroSpotEl = document.getElementById('heroSpot');
-  if (heroSpotEl) {
-    heroSpotEl.textContent = s.current.toFixed(2);
-    const sc = +(s.current - s.prev).toFixed(2);
-    heroSpotEl.className = 'hero-stat-val ' + (sc >= 0 ? 'neg' : 'pos');
-  }
-  const chg = +(s.current - s.prev).toFixed(4);
-  const pct = +((chg / s.prev) * 100).toFixed(2);
-  const el = document.getElementById('spotChg');
-  el.textContent = (chg >= 0 ? '▲ +' : '▼ ') + chg.toFixed(2) + ' (' + (chg >= 0 ? '+' : '') + pct + '%) today';
-  el.className = 'card-sub ' + (chg >= 0 ? 'neg' : 'pos');
-  if (s.low52 && s.high52) {
-    document.getElementById('spotRange').textContent = s.low52.toFixed(2) + ' – ' + s.high52.toFixed(2);
-  }
-  document.getElementById('spotUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-function renderForexChart(pts) {
-  if (!pts || pts.length === 0) return;
-  if (forexChart) forexChart.destroy();
-
-  const allVals = pts.map(p => p.val);
-  const yMin = Math.floor((Math.min(...allVals) - 0.2) * 10) / 10;
-  const yMax = Math.ceil((Math.max(...allVals) + 0.2) * 10) / 10;
-
-  // Color each segment: red if rising (rupee weakening), green if falling
-  const segColors = pts.map((p, i) => {
-    if (i === 0) return 'rgba(240,90,90,0.8)';
-    return pts[i].val >= pts[i-1].val ? 'rgba(240,90,90,0.8)' : 'rgba(29,201,164,0.8)';
-  });
-
-  forexChart = new Chart(document.getElementById('forexChart'), {
-    type: 'line',
-    data: {
-      labels: pts.map(p => p.time),
-      datasets: [{
-        label: 'USD/INR',
-        data: pts.map(p => p.val),
-        borderColor: '#f05a5a',
-        backgroundColor: 'rgba(240,90,90,0.07)',
-        borderWidth: 2,
-        pointRadius: 0,
-        pointHoverRadius: 4,
-        pointHoverBackgroundColor: '#f05a5a',
-        tension: 0.3,
-        fill: true,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#1e2336',
-          borderColor: 'rgba(255,255,255,0.15)',
-          borderWidth: 1,
-          padding: 10,
-          titleColor: '#9ba3bf',
-          titleFont: { family: 'DM Mono', size: 11 },
-          bodyColor: '#e8eaf0',
-          bodyFont: { family: 'DM Mono', size: 12 },
-          callbacks: {
-            title: ctx => ctx[0].label,
-            label: ctx => ' USD/INR: ' + ctx.parsed.y.toFixed(4),
-          }
-        }
-      },
-      scales: {
-        x: {
-          grid: { color: 'rgba(255,255,255,0.04)', drawTicks: false },
-          border: { color: 'rgba(255,255,255,0.08)' },
-          ticks: {
-            color: '#7b8099',
-            font: { family: 'DM Mono', size: 10 },
-            maxTicksLimit: 8,
-            maxRotation: 0,
-          }
-        },
-        y: {
-          min: yMin,
-          max: yMax,
-          grid: { color: 'rgba(255,255,255,0.04)', drawTicks: false },
-          border: { color: 'rgba(255,255,255,0.08)', dash: [4,4] },
-          ticks: {
-            color: '#7b8099',
-            font: { family: 'DM Mono', size: 10 },
-            padding: 8,
-            callback: v => v.toFixed(2),
-            maxTicksLimit: 5,
-          }
-        }
-      }
-    }
-  });
-}
-
-async function refreshAll(force = false) {
-  const btn = document.getElementById('refreshBtn');
-  btn.classList.add('loading');
-  btn.disabled = true;
-  document.getElementById('errorBanner').style.display = 'none';
-
-  try {
-    const { reserves, news } = await fetchAll(force);
-    renderMetrics(reserves);
-    renderWaterfall(reserves);
-    renderImportCover(reserves);
-    renderTrend(reserves);
-    if (news?.items?.length) renderNews(news.items);
-    const spot = await fetchSpotRate();
-    renderSpotMetrics(spot);
-    if (spot?.pts) renderForexChart(spot.pts);
-  } catch (err) {
-    showError('Could not reach backend. Make sure the server is running on localhost:3000.');
-    // Still try to show static data
-    const staticReserves = {
-      weekEnding: 'May 1, 2026', gross: 690.7, prevGross: 698.5,
-      gold: 131, forwardBook: 103, forwardBookAsOf: '2026-03',
-      sdr: 18.7, usable: 438.0, monthlyImports: 62,
-      grossImportCover: 11.1, usableImportCover: 7.1,
-    };
-    renderMetrics(staticReserves);
-    renderWaterfall(staticReserves);
-    renderImportCover(staticReserves);
-    renderTrend(staticReserves);
-    const spotFallback = await fetchSpotRate();
-    renderSpotMetrics(spotFallback);
-    if (spotFallback?.pts) renderForexChart(spotFallback.pts);
-  }
-
-  btn.classList.remove('loading');
-  btn.disabled = false;
-}
-
-// News refresh countdown display
-let newsNextRefresh = Date.now() + 15 * 60 * 1000;
-function updateNewsCountdown() {
-  const remaining = Math.max(0, newsNextRefresh - Date.now());
-  const m = Math.floor(remaining / 60000);
-  const s = Math.floor((remaining % 60000) / 1000);
-  const el = document.getElementById('newsCountdown');
-  if (el) el.textContent = 'next in ' + m + ':' + String(s).padStart(2,'0');
-}
-setInterval(updateNewsCountdown, 1000);
-
-// ── Scenario analyser ──────────────────────────────────────────
-let scenarioReserveData = null; // set when reserves load
-
-function setScenario(val) {
-  document.getElementById('rupeeSlider').value = val;
-  document.querySelectorAll('.preset-btn').forEach(b => {
-    b.classList.toggle('active', parseFloat(b.getAttribute('onclick').match(/[d.]+/)[0]) === val);
-  });
+function setScenario(val){
+  document.getElementById('rupeeSlider').value=val;
+  var ids=['pre1','pre2','pre3','pre4','pre5','pre6'];
+  var vals=[83.9,89.0,94.85,97.0,100.0,105.0];
+  ids.forEach(function(id,i){var el=document.getElementById(id);if(el)el.classList.toggle('active',Math.abs(vals[i]-parseFloat(val))<0.1);});
   updateScenario(val);
 }
 
-function updateScenario(rupeeVal) {
-  rupeeVal = parseFloat(rupeeVal);
-  document.getElementById('sliderVal').textContent = '₹' + rupeeVal.toFixed(2);
-
-  const BASE_RUPEE   = 83.9;    // 52-week low (strongest rupee)
-  const CURR_RUPEE   = 94.85;   // current level
-  const USABLE_USD   = scenarioReserveData ? scenarioReserveData.usable   : 438;
-  const FWD_USD      = scenarioReserveData ? scenarioReserveData.forwardBook : 103;
-  const MONTHLY_IMP  = scenarioReserveData ? scenarioReserveData.monthlyImports : 62;
-  const OIL_BILL_USD = 130; // India annual oil import bill ~$130B
-
-  // Depreciation from base
-  const deprFromBase = (((rupeeVal - BASE_RUPEE) / BASE_RUPEE) * 100).toFixed(1);
-  const deprFromCurr = (((rupeeVal - CURR_RUPEE) / CURR_RUPEE) * 100).toFixed(1);
-
-  // Extra oil cost: same barrels, higher INR price, but paid in USD — 
-  // the USD cost itself rises when rupee falls because India pays in USD
-  // Proxy: each 1% rupee fall raises effective import bill by ~0.8% (pass-through)
-  const pctChange = (rupeeVal - CURR_RUPEE) / CURR_RUPEE;
-  const extraOilUSD = (OIL_BILL_USD * pctChange * 0.8).toFixed(1);
-
-  // Effective monthly import cost rises proportionally
-  const adjMonthlyImp = MONTHLY_IMP * (1 + pctChange * 0.5);
-
-  // Usable reserves stay in USD terms but real purchasing power changes
-  const importCover = (USABLE_USD / adjMonthlyImp).toFixed(1);
-
-  // Forward book obligation in INR
-  const fwdINR = ((FWD_USD * rupeeVal) / 1000).toFixed(1); // in trillion INR
-
-  // Status thresholds
-  let status, statusSub, verdictClass, verdictText;
-  const cover = parseFloat(importCover);
-
-  if (cover >= 9) {
-    status = '✓ Safe'; statusSub = 'Comfortable buffer';
-    verdictClass = 'safe';
-    verdictText = '<strong>Comfortable zone.</strong> At ₹' + rupeeVal.toFixed(2) + ', import cover of ' + importCover + ' months is well above the 6-month RBI threshold and the IMF's 3-month minimum. Reserves provide adequate cushion for external shocks.';
-  } else if (cover >= 6) {
-    status = '⚡ Adequate'; statusSub = 'Above threshold';
-    verdictClass = 'safe';
-    verdictText = '<strong>Adequate but watch closely.</strong> At ₹' + rupeeVal.toFixed(2) + ', import cover of ' + importCover + ' months stays above the 6-month safety floor. The RBI can manage at this level but has limited room for further deterioration.';
-  } else if (cover >= 4) {
-    status = '⚠ Caution'; statusSub = 'Approaching danger';
-    verdictClass = 'caution';
-    verdictText = '<strong>Caution zone.</strong> At ₹' + rupeeVal.toFixed(2) + ', import cover falls to ' + importCover + ' months — below the 6-month RBI threshold. This would likely trigger emergency measures: emergency rate hikes, import duty increases, gold sales, or IMF consultation.';
-  } else if (cover >= 3) {
-    status = '🔴 Danger'; statusSub = 'Below safe floor';
-    verdictClass = 'danger';
-    verdictText = '<strong>Danger zone.</strong> At ₹' + rupeeVal.toFixed(2) + ', import cover collapses to ' + importCover + ' months — near the IMF's 3-month minimum. India would face severe credibility pressure, likely credit rating downgrades, and may need to draw on the IMF. This is the 1991 scenario.';
-  } else {
-    status = '🆘 Crisis'; statusSub = 'IMF territory';
-    verdictClass = 'danger';
-    verdictText = '<strong>Crisis — IMF territory.</strong> At ₹' + rupeeVal.toFixed(2) + ', import cover of ' + importCover + ' months is below the IMF minimum. India would likely need an emergency IMF programme. The last time India was here was 1991, when it pledged gold to avert default.';
-  }
-
-  // Update cards
-  document.getElementById('scDepreciation').textContent = (deprFromBase >= 0 ? '+' : '') + deprFromBase + '%';
-  document.getElementById('scDepreciation').style.color = deprFromBase > 0 ? 'var(--red)' : 'var(--green)';
-
-  const extraSign = parseFloat(extraOilUSD) > 0 ? '+' : '';
-  document.getElementById('scImportCost').textContent = extraSign + '
-// Auto-refresh every 30 minutes
-setInterval(() => refreshAll(false), 30 * 60 * 1000);
-// Auto-refresh spot rate every 5 minutes
-setInterval(async () => { const s = await fetchSpotRate(); renderSpotMetrics(s); if (s?.pts) renderForexChart(s.pts); }, 5 * 60 * 1000);
-// Auto-refresh news every 15 minutes independently
-setInterval(async () => {
-  try {
-    const r = await fetch(API_BASE + '/api/news?refresh=true');
-    const { data } = await r.json();
-    if (data?.items?.length) renderNews(data.items);
-  } catch(e) { console.warn('News auto-refresh failed', e); }
-}, 15 * 60 * 1000);
-</script>
-</body>
-</html>
- + extraOilUSD + 'B';
-  document.getElementById('scImportCost').style.color = parseFloat(extraOilUSD) > 0 ? 'var(--red)' : 'var(--green)';
-
-  document.getElementById('scImportCover').textContent = importCover + ' mo';
-  document.getElementById('scImportCover').style.color = cover >= 6 ? 'var(--green)' : cover >= 4 ? 'var(--amber)' : 'var(--red)';
-
-  document.getElementById('scUsable').textContent = '
-// Auto-refresh every 30 minutes
-setInterval(() => refreshAll(false), 30 * 60 * 1000);
-// Auto-refresh spot rate every 5 minutes
-setInterval(async () => { const s = await fetchSpotRate(); renderSpotMetrics(s); if (s?.pts) renderForexChart(s.pts); }, 5 * 60 * 1000);
-// Auto-refresh news every 15 minutes independently
-setInterval(async () => {
-  try {
-    const r = await fetch(API_BASE + '/api/news?refresh=true');
-    const { data } = await r.json();
-    if (data?.items?.length) renderNews(data.items);
-  } catch(e) { console.warn('News auto-refresh failed', e); }
-}, 15 * 60 * 1000);
-</script>
-</body>
-</html>
- + USABLE_USD + 'B';
-  document.getElementById('scUsable').style.color = 'var(--teal)';
-
-  document.getElementById('scFwdINR').textContent = '₹' + fwdINR + 'T';
-  document.getElementById('scFwdINR').style.color = 'var(--amber)';
-
-  document.getElementById('scStatus').textContent = status;
-  document.getElementById('scStatus').style.color = cover >= 6 ? 'var(--green)' : cover >= 4 ? 'var(--amber)' : 'var(--red)';
-  document.getElementById('scStatusSub').textContent = statusSub;
-
-  const verdict = document.getElementById('scVerdict');
-  verdict.className = 'scenario-verdict ' + verdictClass;
-  verdict.innerHTML = verdictText;
+function updateScenario(rupeeVal){
+  rupeeVal=parseFloat(rupeeVal);
+  document.getElementById('sliderVal').textContent='Rs.'+rupeeVal.toFixed(2);
+  var BASE=83.9,CURR=94.85;
+  var USABLE=scenarioData.usable,FWD=scenarioData.forwardBook,MIMP=scenarioData.monthlyImports;
+  var depr=(((rupeeVal-BASE)/BASE)*100).toFixed(1);
+  var pct=(rupeeVal-CURR)/CURR;
+  var extraOil=(130*pct*0.8).toFixed(1);
+  var adjImp=MIMP*(1+pct*0.5);
+  var cover=(USABLE/adjImp).toFixed(1);
+  var fwdINR=((FWD*rupeeVal)/1000).toFixed(1);
+  var cn=parseFloat(cover);
+  document.getElementById('scDepreciation').textContent=(depr>=0?'+':'')+depr+'%';
+  document.getElementById('scDepreciation').style.color=depr>0?'var(--red)':'var(--green)';
+  document.getElementById('scImportCost').textContent=(extraOil>0?'+':'')+'$'+extraOil+'B';
+  document.getElementById('scImportCost').style.color=extraOil>0?'var(--red)':'var(--green)';
+  document.getElementById('scImportCover').textContent=cover+' mo';
+  document.getElementById('scImportCover').style.color=cn>=6?'var(--green)':cn>=4?'var(--amber)':'var(--red)';
+  document.getElementById('scUsable').textContent='$'+USABLE+'B';
+  document.getElementById('scUsable').style.color='var(--teal)';
+  document.getElementById('scFwdINR').textContent='Rs.'+fwdINR+'T';
+  document.getElementById('scFwdINR').style.color='var(--amber)';
+  var status,sub,cls,verdict;
+  if(cn>=9){status='Safe';sub='Comfortable buffer';cls='safe';verdict='Comfortable zone. At Rs.'+rupeeVal.toFixed(2)+', import cover of '+cover+' months is well above the 6-month RBI threshold. Adequate cushion for external shocks.';}
+  else if(cn>=6){status='Adequate';sub='Above threshold';cls='safe';verdict='Adequate but watch closely. At Rs.'+rupeeVal.toFixed(2)+', import cover of '+cover+' months stays above the safety floor. Limited room for further deterioration.';}
+  else if(cn>=4){status='Caution';sub='Approaching danger';cls='caution';verdict='Caution zone. At Rs.'+rupeeVal.toFixed(2)+', import cover falls to '+cover+' months, below the RBI threshold. Emergency measures likely: rate hikes, import duties, gold sales or IMF consultation.';}
+  else if(cn>=3){status='Danger';sub='Below safe floor';cls='danger';verdict='Danger zone. At Rs.'+rupeeVal.toFixed(2)+', import cover collapses to '+cover+' months near the IMF minimum. Severe credibility pressure, likely credit rating downgrades. This mirrors the 1991 scenario.';}
+  else{status='Crisis';sub='IMF territory';cls='danger';verdict='Crisis. At Rs.'+rupeeVal.toFixed(2)+', import cover of '+cover+' months is below the IMF minimum. India would likely need an emergency IMF programme as in 1991.';}
+  document.getElementById('scStatus').textContent=status;
+  document.getElementById('scStatus').style.color=cls==='safe'?'var(--green)':cls==='caution'?'var(--amber)':'var(--red)';
+  document.getElementById('scStatusSub').textContent=sub;
+  var v=document.getElementById('scVerdict');
+  v.className='sc-verdict '+cls;
+  v.textContent=verdict;
 }
 
-// Boot
-refreshAll(false);
-// Auto-refresh every 30 minutes
-setInterval(() => refreshAll(false), 30 * 60 * 1000);
-// Auto-refresh spot rate every 5 minutes
-setInterval(async () => { const s = await fetchSpotRate(); renderSpotMetrics(s); if (s?.pts) renderForexChart(s.pts); }, 5 * 60 * 1000);
-// Auto-refresh news every 15 minutes independently
-setInterval(async () => {
-  try {
-    const r = await fetch(API_BASE + '/api/news?refresh=true');
-    const { data } = await r.json();
-    if (data?.items?.length) renderNews(data.items);
-  } catch(e) { console.warn('News auto-refresh failed', e); }
-}, 15 * 60 * 1000);
+async function refreshAll(){
+  var btn=document.getElementById('refreshBtn');
+  btn.classList.add('loading');btn.disabled=true;
+  document.getElementById('errorBanner').style.display='none';
+  try{
+    var r=await fetch(API_BASE+'/api/all?refresh=true');
+    if(!r.ok)throw new Error('API '+r.status);
+    var resp=await r.json();
+    renderMetrics(resp.reserves);renderWaterfall(resp.reserves);renderImportCover(resp.reserves);renderTrend(resp.reserves);
+    if(resp.news&&resp.news.items&&resp.news.items.length)renderNews(resp.news.items);
+    try{var s=await fetch(API_BASE+'/api/spot');var sd=await s.json();if(sd.current){renderSpotMetrics(sd);if(sd.pts&&sd.pts.length)renderForexChart(sd.pts);}}catch(e){console.warn('Spot failed',e);}
+  }catch(e){
+    showError('Could not reach server. Using cached data.','warn');
+    var sd={weekEnding:'May 1, 2026',gross:690.7,prevGross:698.5,gold:131,forwardBook:103,forwardBookAsOf:'2026-03',sdr:18.7,usable:438.0,monthlyImports:62,grossImportCover:11.1,usableImportCover:7.1};
+    renderMetrics(sd);renderWaterfall(sd);renderImportCover(sd);renderTrend(sd);
+  }
+  btn.classList.remove('loading');btn.disabled=false;
+}
+
+setInterval(function(){
+  var rem=Math.max(0,newsNextRefresh-Date.now());
+  var m=Math.floor(rem/60000);var s=Math.floor((rem%60000)/1000);
+  var el=document.getElementById('newsCountdown');
+  if(el)el.textContent='next in '+m+':'+(s<10?'0':'')+s;
+},1000);
+
+setInterval(async function(){try{var r=await fetch(API_BASE+'/api/news?refresh=true');var d=await r.json();if(d.data&&d.data.items&&d.data.items.length)renderNews(d.data.items);}catch(e){}},15*60*1000);
+setInterval(async function(){try{var r=await fetch(API_BASE+'/api/spot');var d=await r.json();if(d.current){renderSpotMetrics(d);if(d.pts&&d.pts.length)renderForexChart(d.pts);}}catch(e){}},5*60*1000);
+setInterval(function(){refreshAll();},30*60*1000);
+
+updateScenario(94.85);
+refreshAll();
 </script>
 </body>
 </html>
