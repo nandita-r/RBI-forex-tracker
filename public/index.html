@@ -131,6 +131,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .news-loading{display:flex;align-items:center;justify-content:center;gap:8px;padding:20px;color:var(--muted);font-size:12px;}
 .news-loading svg{animation:spin .8s linear infinite;}
 .note{font-size:10px;color:var(--dim);padding:10px 16px;border-top:1px solid var(--border);flex-shrink:0;line-height:1.5;}
+.news-link{display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--teal);text-decoration:none;opacity:0.7;margin-top:4px;transition:opacity .15s;}
+.news-link:hover{opacity:1;text-decoration:underline;}
+.news-link svg{width:9px;height:9px;flex-shrink:0;}
 @media(max-width:900px){.main{grid-template-columns:1fr;height:auto;overflow:visible;}.right{border-left:none;border-top:1px solid var(--border);max-height:500px;}.metric-row{grid-template-columns:repeat(2,1fr);}.hero{flex-direction:column;align-items:flex-start;}.hero-divider{display:none;}.hero-value{font-size:38px;}.sc-grid{grid-template-columns:repeat(2,1fr);}}
 </style>
 </head>
@@ -410,8 +413,25 @@ function renderForexChart(pts){
   });
 }
 
+function parseAgeMs(age){
+  // Convert age string like "2h ago", "3 days ago" back to ms for sorting
+  if(!age)return 0;
+  var m;
+  if((m=age.match(/(d+)h ago/)))return parseInt(m[1])*3600000;
+  if((m=age.match(/(d+) day/)))return parseInt(m[1])*86400000;
+  if((m=age.match(/(d+) week/)))return parseInt(m[1])*604800000;
+  if(age==='Just now')return 0;
+  return 9999999999; // unknown = oldest
+}
+
 function renderNews(items){
-  allNewsItems=items;
+  // Sort latest first — use precise timestamp if available, fall back to age string
+  var sorted = items.slice().sort(function(a,b){
+    var ta = a.pubDateMs || (Date.now() - parseAgeMs(a.age));
+    var tb = b.pubDateMs || (Date.now() - parseAgeMs(b.age));
+    return tb - ta; // descending: newest first
+  });
+  allNewsItems=sorted;
   var active=document.querySelector('.filter-btn.active');
   var filter='all';
   if(active){var m=active.getAttribute('onclick').match(/'([^']+)'/);if(m)filter=m[1];}
@@ -425,10 +445,17 @@ function renderNews(items){
 function applyNewsFilter(filter){
   var items=filter==='all'?allNewsItems:(filter==='pos'||filter==='neg')?allNewsItems.filter(function(n){return n.impact===filter;}):allNewsItems.filter(function(n){return n.category===filter;});
   if(!items.length){document.getElementById('newsFeed').innerHTML='<div style="padding:20px;text-align:center;color:#4a5068;font-size:12px;">No items match this filter</div>';return;}
+  var extIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
   document.getElementById('newsFeed').innerHTML=items.map(function(n){
     var tl=n.impact==='pos'?'Positive':n.impact==='neg'?'Negative':'Watch';
     var cat=n.category?'<span class="news-cat">'+n.category+'</span>':'';
-    return '<div class="news-item"><span class="news-tag '+n.impact+'">'+tl+'</span><div class="news-text">'+n.text+'</div><div class="news-meta"><span>'+n.source+'</span><span>·</span><span>'+n.age+'</span>'+cat+'</div></div>';
+    var link=n.link?'<a class="news-link" href="'+n.link+'" target="_blank" rel="noopener noreferrer">Read full article '+extIcon+'</a>':'';
+    return '<div class="news-item">'
+      +'<span class="news-tag '+n.impact+'">'+tl+'</span>'
+      +'<div class="news-text">'+n.text+'</div>'
+      +'<div class="news-meta"><span>'+n.source+'</span><span>·</span><span>'+n.age+'</span>'+cat+'</div>'
+      +link
+      +'</div>';
   }).join('');
 }
 
