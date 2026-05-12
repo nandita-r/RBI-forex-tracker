@@ -185,12 +185,22 @@ cron.schedule('*/15 * * * *', async () => {
 
 // ── Startup ───────────────────────────────────────────────────
 
-app.listen(PORT, async () => {
-  console.log(`\n🏦  RBI Forex Tracker running on http://localhost:${PORT}`);
-  console.log(`📊  API: http://localhost:${PORT}/api/all`);
-  console.log(`\nPre-loading data...`);
-  await Promise.all([refreshReserves(true), refreshNews(true)]);
-  console.log('✅  Ready\n');
+app.listen(PORT, () => {
+  console.log(`\n RBI Forex Tracker running on http://localhost:${PORT}`);
+  console.log(` API: http://localhost:${PORT}/api/all`);
+  console.log(` Healthcheck: http://localhost:${PORT}/api/health\n`);
+
+  // Load data in background AFTER server is listening
+  // so Railway healthcheck passes immediately
+  setTimeout(async () => {
+    console.log('[Startup] Pre-loading data in background...');
+    try {
+      await Promise.all([refreshReserves(true), refreshNews(true)]);
+      console.log('[Startup] Data pre-loaded successfully');
+    } catch(e) {
+      console.warn('[Startup] Pre-load failed (will retry on first request):', e.message);
+    }
+  }, 2000); // 2 second delay — server is ready before data loads
 });
 
 
