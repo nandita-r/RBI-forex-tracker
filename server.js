@@ -13,71 +13,55 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// In-memory cache
 let reserveCache = null;
 let newsCache = null;
 let lastReserveFetch = null;
 let lastNewsFetch = null;
 
-const RESERVE_CACHE_TTL_MS = 60 * 60 * 1000;      // 1 hour
-const NEWS_CACHE_TTL_MS   = 30 * 60 * 1000;        // 30 minutes
+const RESERVE_TTL = 60 * 60 * 1000;
+const NEWS_TTL    = 30 * 60 * 1000;
 
-function isCacheStale(lastFetch, ttl) {
-  if (!lastFetch) return true;
-  return (Date.now() - lastFetch) > ttl;
+function isStale(last, ttl) {
+  if (!last) return true;
+  return (Date.now() - last) > ttl;
 }
 
-// Refresh reserve data
 async function refreshReserves(force = false) {
-  if (!force && !isCacheStale(lastReserveFetch, RESERVE_CACHE_TTL_MS)) {
-    return reserveCache;
-  }
-  console.log('[Cache] Refreshing RBI reserve data...');
-  const data = await fetchRBIReserves();
-  reserveCache = data;
+  if (!force && !isStale(lastReserveFetch, RESERVE_TTL)) return reserveCache;
+  console.log('[Cache] Refreshing reserves...');
+  reserveCache = await fetchRBIReserves();
   lastReserveFetch = Date.now();
-  console.log(`[Cache] Reserves updated — gross: $${data.gross}B, usable: $${data.usable}B`);
-  return data;
+  console.log(`[Cache] Reserves: $${reserveCache.gross}B gross, $${reserveCache.usable}B usable`);
+  return reserveCache;
 }
 
-// Refresh news
 async function refreshNews(force = false) {
-  if (!force && !isCacheStale(lastNewsFetch, NEWS_CACHE_TTL_MS)) {
-    return newsCache;
-  }
-  console.log('[Cache] Refreshing news feed...');
-  const data = await fetchForexNews();
-  newsCache = data;
+  if (!force && !isStale(lastNewsFetch, NEWS_TTL)) return newsCache;
+  console.log('[Cache] Refreshing news...');
+  newsCache = await fetchForexNews();
   lastNewsFetch = Date.now();
-  console.log(`[Cache] News updated — ${data.items?.length || 0} items`);
-  return data;
+  console.log(`[Cache] News: ${newsCache.items?.length || 0} items`);
+  return newsCache;
 }
 
-// ── API Routes ────────────────────────────────────────────────
-
-// GET /api/reserves — returns current reserve data
 app.get('/api/reserves', async (req, res) => {
   try {
-    const force = req.query.refresh === 'true';
-    const data = await refreshReserves(force);
+    const data = await refreshReserves(req.query.refresh === 'true');
     res.json({ ok: true, data, cachedAt: new Date(lastReserveFetch).toISOString() });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-// GET /api/news — returns impact-assessed news feed
 app.get('/api/news', async (req, res) => {
   try {
-    const force = req.query.refresh === 'true';
-    const data = await refreshNews(force);
+    const data = await refreshNews(req.query.refresh === 'true');
     res.json({ ok: true, data, cachedAt: new Date(lastNewsFetch).toISOString() });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-// GET /api/all — reserves + news in one call (what the frontend uses)
 app.get('/api/all', async (req, res) => {
   try {
     const force = req.query.refresh === 'true';
@@ -85,18 +69,12 @@ app.get('/api/all', async (req, res) => {
       refreshReserves(force),
       refreshNews(force),
     ]);
-    res.json({
-      ok: true,
-      reserves,
-      news,
-      serverTime: new Date().toISOString(),
-    });
+    res.json({ ok: true, reserves, news, serverTime: new Date().toISOString() });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-// GET /api/health
 app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
@@ -108,28 +86,22 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// ── Scheduled Jobs ────────────────────────────────────────────
-
-// RBI publishes WSS every Friday ~6pm IST — run cron at 6:30pm IST (13:00 UTC) Friday
+// Scrape RBI every Friday 6:30pm IST (13:00 UTC)
 cron.schedule('0 13 * * 5', async () => {
-  console.log('[Cron] Friday WSS refresh triggered');
+  console.log('[Cron] Friday WSS refresh');
   await refreshReserves(true);
 }, { timezone: 'UTC' });
 
 // Refresh news every 2 hours
 cron.schedule('0 */2 * * *', async () => {
-  console.log('[Cron] Scheduled news refresh');
+  console.log('[Cron] News refresh');
   await refreshNews(true);
 });
 
-// ── Startup ───────────────────────────────────────────────────
-
 app.listen(PORT, async () => {
-  console.log(`\n🏦  RBI Forex Tracker running on http://localhost:${PORT}`);
-  console.log(`📊  API: http://localhost:${PORT}/api/all`);
-  console.log(`\nPre-loading data...`);
+  console.log(`\n RBI Forex Tracker on http://localhost:${PORT}`);
   await Promise.all([refreshReserves(true), refreshNews(true)]);
-  console.log('✅  Ready\n');
+  console.log('Ready\n');
 });
 
 module.exports = app;
