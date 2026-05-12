@@ -6,3 +6,6 @@ restartPolicyType = "on_failure"
 
 [build]
 buildCommand = "npm install"
+
+[variables]
+PORT = "3000"
