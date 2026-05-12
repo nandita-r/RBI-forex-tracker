@@ -46,7 +46,7 @@ async function refreshNews(force = false) {
     return newsCache;
   }
   console.log('[Cache] Refreshing news feed...');
-  const data = await fetchForexNews(process.env.ANTHROPIC_API_KEY);
+  const data = await fetchForexNews();
   newsCache = data;
   lastNewsFetch = Date.now();
   console.log(`[Cache] News updated — ${data.items?.length || 0} items`);
