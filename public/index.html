@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RBI Forex Tracker — True Usable Reserves</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #181c27;
+  --surface2: #1e2336;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.13);
+  --text: #e8eaf0;
+  --muted: #7b8099;
+  --dim: #4a5068;
+  --green: #22c87a;
+  --green-bg: rgba(34,200,122,0.1);
+  --red: #f05a5a;
+  --red-bg: rgba(240,90,90,0.1);
+  --amber: #f5a623;
+  --amber-bg: rgba(245,166,35,0.1);
+  --blue: #4a8fff;
+  --blue-bg: rgba(74,143,255,0.1);
+  --teal: #1dc9a4;
+  --mono: 'DM Mono', monospace;
+  --sans: 'DM Sans', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; min-height: 100vh; }
+
+.top-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 24px; border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.logo { display: flex; align-items: center; gap: 10px; }
+.logo-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 8px var(--teal); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.logo-text { font-family: var(--mono); font-size: 13px; font-weight: 500; letter-spacing: 0.08em; color: var(--text); }
+.logo-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.top-right { display: flex; align-items: center; gap: 12px; }
+.as-of { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.refresh-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 16px; border-radius: 6px; cursor: pointer;
+  background: var(--teal); color: #0f1117; border: none;
+  font-family: var(--sans); font-size: 12px; font-weight: 500;
+  transition: opacity 0.15s;
+}
+.refresh-btn:hover { opacity: 0.85; }
+.refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.refresh-btn svg { width: 13px; height: 13px; }
+.refresh-btn.loading svg { animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.main { display: grid; grid-template-columns: 1fr 340px; height: calc(100vh - 53px); overflow: hidden; }
+.left { overflow-y: auto; padding: 20px 20px 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+.right { border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+
+/* Metric cards */
+.metric-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 16px;
+}
+.card-label { font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; }
+.card-value { font-family: var(--mono); font-size: 22px; font-weight: 500; color: var(--text); }
+.card-sub { font-size: 10px; color: var(--muted); margin-top: 4px; font-family: var(--mono); }
+.card-sub.pos { color: var(--green); }
+.card-sub.neg { color: var(--red); }
+.card.usable { border-color: rgba(29,201,164,0.3); background: rgba(29,201,164,0.05); }
+.card.usable .card-value { color: var(--teal); }
+.card.warn .card-value { color: var(--amber); }
+
+/* Waterfall */
+.section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+.section-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 14px; }
+.wf-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+.wf-label { font-size: 11px; color: var(--muted); width: 170px; flex-shrink: 0; text-align: right; }
+.wf-track { flex: 1; height: 24px; background: rgba(255,255,255,0.04); border-radius: 4px; overflow: hidden; position: relative; }
+.wf-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+.wf-fill span { font-family: var(--mono); font-size: 10px; font-weight: 500; }
+.wf-gross { background: var(--blue); } .wf-gross span { color: #0a1a3a; }
+.wf-gold  { background: var(--amber); } .wf-gold span { color: #2a1500; }
+.wf-fwd   { background: var(--red); } .wf-fwd span { color: #2a0000; }
+.wf-sdr   { background: var(--dim); } .wf-sdr span { color: var(--muted); }
+.wf-usable{ background: var(--teal); } .wf-usable span { color: #002a1a; }
+.wf-sign  { font-size: 13px; color: var(--dim); width: 12px; text-align: center; flex-shrink: 0; }
+
+/* Import cover */
+.cover-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
+.cover-item { text-align: center; }
+.cover-bar-wrap { display: flex; align-items: flex-end; justify-content: center; height: 70px; margin-bottom: 6px; }
+.cover-bar { width: 48px; border-radius: 4px 4px 0 0; transition: height 0.8s cubic-bezier(0.4,0,0.2,1); display: flex; align-items: flex-start; justify-content: center; padding-top: 5px; }
+.cover-bar span { font-family: var(--mono); font-size: 11px; font-weight: 500; }
+.cover-lbl { font-size: 10px; color: var(--muted); margin-top: 4px; }
+.safe-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; padding: 5px 10px; border-radius: 5px; margin-top: 10px; }
+.safe-badge.ok  { background: var(--green-bg); color: var(--green); }
+.safe-badge.warn{ background: var(--amber-bg); color: var(--amber); }
+
+/* History chart */
+.chart-wrap { position: relative; width: 100%; height: 140px; }
+
+/* News panel */
+.news-header {
+  padding: 14px 16px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+.news-title { font-size: 12px; font-weight: 500; color: var(--text); display: flex; align-items: center; gap: 6px; }
+.live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); animation: pulse 1.5s infinite; }
+.news-updated { font-family: var(--mono); font-size: 10px; color: var(--dim); }
+.news-filters { display: flex; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap; }
+.filter-btn {
+  font-size: 10px; padding: 3px 10px; border-radius: 20px; cursor: pointer;
+  background: transparent; border: 1px solid var(--border2); color: var(--muted);
+  transition: all 0.15s;
+}
+.filter-btn.active { color: var(--text); border-color: var(--teal); background: rgba(29,201,164,0.08); }
+.news-feed { overflow-y: auto; flex: 1; }
+.news-item {
+  padding: 11px 16px; border-bottom: 1px solid var(--border);
+  cursor: default; transition: background 0.12s;
+}
+.news-item:hover { background: rgba(255,255,255,0.02); }
+.news-item:last-child { border-bottom: none; }
+.news-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 9px; font-weight: 500; letter-spacing: 0.05em;
+  padding: 2px 7px; border-radius: 3px; margin-bottom: 5px; text-transform: uppercase;
+}
+.news-tag.pos { background: var(--green-bg); color: var(--green); }
+.news-tag.neg { background: var(--red-bg); color: var(--red); }
+.news-tag.neu { background: rgba(255,255,255,0.05); color: var(--muted); }
+.news-text { font-size: 12px; color: var(--text); line-height: 1.55; margin-bottom: 4px; }
+.news-meta { font-size: 10px; color: var(--dim); display: flex; gap: 8px; }
+.news-cat { background: rgba(255,255,255,0.04); padding: 1px 5px; border-radius: 2px; }
+.news-loading { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 20px; color: var(--muted); font-size: 12px; }
+.news-loading svg { animation: spin 0.8s linear infinite; }
+.note { font-size: 10px; color: var(--dim); padding: 10px 16px; border-top: 1px solid var(--border); flex-shrink: 0; line-height: 1.5; }
+.error-banner { background: var(--red-bg); border: 1px solid rgba(240,90,90,0.2); border-radius: 6px; padding: 8px 12px; font-size: 11px; color: var(--red); margin-bottom: 4px; display: none; }
+
+@media (max-width: 900px) {
+  .main { grid-template-columns: 1fr; height: auto; overflow: visible; }
+  .right { border-left: none; border-top: 1px solid var(--border); max-height: 500px; }
+  .metric-row { grid-template-columns: repeat(2,1fr); }
+}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="logo">
+    <div class="logo-dot"></div>
+    <div>
+      <div class="logo-text">RBI FOREX TRACKER</div>
+      <div class="logo-sub">True usable reserves · Weekly WSS data</div>
+    </div>
+  </div>
+  <div class="top-right">
+    <span class="as-of" id="asOf">Loading...</span>
+    <button class="refresh-btn" id="refreshBtn" onclick="refreshAll()">
+      <svg id="refreshIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/>
+      </svg>
+      Refresh
+    </button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="left">
+    <div class="error-banner" id="errorBanner"></div>
+
+    <div class="metric-row">
+      <div class="card">
+        <div class="card-label">Gross reserves</div>
+        <div class="card-value" id="mGross">—</div>
+        <div class="card-sub" id="mGrossChg">—</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Less: gold</div>
+        <div class="card-value" id="mGold">—</div>
+        <div class="card-sub">Illiquid in a crisis</div>
+      </div>
+      <div class="card warn">
+        <div class="card-label">Less: fwd book</div>
+        <div class="card-value" id="mFwd">—</div>
+        <div class="card-sub" id="mFwdAsOf">—</div>
+      </div>
+      <div class="card usable">
+        <div class="card-label">True usable</div>
+        <div class="card-value" id="mUsable">—</div>
+        <div class="card-sub">Excl. SDRs / IMF</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Breakdown — gross to usable</div>
+      <div id="waterfallEl"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Import cover (months of goods imports)</div>
+      <div class="cover-grid" id="coverGrid"></div>
+      <div id="safeBadge"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Usable reserves trend (last 8 weeks)</div>
+      <div class="chart-wrap">
+        <canvas id="trendChart" role="img" aria-label="Weekly trend of RBI true usable forex reserves">Reserve trend data loading.</canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="news-header">
+      <div class="news-title"><div class="live-dot"></div> RBI / GOI forex impact</div>
+      <span class="news-updated" id="newsUpdated">—</span>
+    </div>
+    <div class="news-filters">
+      <button class="filter-btn active" data-filter="all" onclick="filterNews('all',this)">All</button>
+      <button class="filter-btn" data-filter="pos" onclick="filterNews('pos',this)">▲ Positive</button>
+      <button class="filter-btn" data-filter="neg" onclick="filterNews('neg',this)">▼ Negative</button>
+      <button class="filter-btn" data-filter="intervention" onclick="filterNews('intervention',this)">Intervention</button>
+      <button class="filter-btn" data-filter="policy" onclick="filterNews('policy',this)">Policy</button>
+      <button class="filter-btn" data-filter="flows" onclick="filterNews('flows',this)">Flows</button>
+    </div>
+    <div class="news-loading" id="newsLoading">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg>
+      Loading news...
+    </div>
+    <div class="news-feed" id="newsFeed" style="display:none"></div>
+    <div class="note">Impact assessed by AI. Positive = helps forex kitty, Negative = drains it. Data from RBI WSS &amp; public sources. Not investment advice.</div>
+  </div>
+</div>
+
+<script>
+const API_BASE = window.location.origin;
+let allNewsItems = [];
+let trendChart = null;
+
+// Simulated historical trend (last 8 weeks) — backend will supply real data in future
+const TREND_HISTORY = [
+  { week: 'Mar 7',  gross: 728.5, usable: 507.8 },
+  { week: 'Mar 14', gross: 725.1, usable: 504.1 },
+  { week: 'Mar 21', gross: 719.4, usable: 498.3 },
+  { week: 'Mar 28', gross: 714.2, usable: 493.0 },
+  { week: 'Apr 4',  gross: 708.0, usable: 486.8 },
+  { week: 'Apr 11', gross: 703.3, usable: 481.2 },
+  { week: 'Apr 24', gross: 698.5, usable: 476.5 },
+  { week: 'May 1',  gross: 690.7, usable: 438.0 },
+];
+
+async function fetchAll(force = false) {
+  const url = `${API_BASE}/api/all${force ? '?refresh=true' : ''}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Server returned ${r.status}`);
+  return r.json();
+}
+
+function renderMetrics(d) {
+  document.getElementById('mGross').textContent = `$${d.gross}B`;
+  document.getElementById('mGold').textContent  = `$${d.gold}B`;
+  document.getElementById('mFwd').textContent   = `$${d.forwardBook}B`;
+  document.getElementById('mUsable').textContent= `$${d.usable}B`;
+  document.getElementById('mFwdAsOf').textContent = `As of ${d.forwardBookAsOf}`;
+  document.getElementById('asOf').textContent   = `Week ending ${d.weekEnding}`;
+
+  const chg = d.prevGross ? +(d.gross - d.prevGross).toFixed(1) : null;
+  const chgEl = document.getElementById('mGrossChg');
+  if (chg !== null) {
+    chgEl.textContent = `${chg >= 0 ? '▲' : '▼'} $${Math.abs(chg)}B vs prev week`;
+    chgEl.className = 'card-sub ' + (chg >= 0 ? 'pos' : 'neg');
+  }
+
+  if (d.note) showError(d.note, 'warn');
+}
+
+function renderWaterfall(d) {
+  const rows = [
+    { label: 'Gross headline', val: d.gross,        cls: 'wf-gross',  sign: ''  },
+    { label: 'Less: gold',     val: d.gold,          cls: 'wf-gold',   sign: '−' },
+    { label: 'Less: fwd book', val: d.forwardBook,   cls: 'wf-fwd',    sign: '−' },
+    { label: 'Less: SDR/IMF',  val: d.sdr,           cls: 'wf-sdr',    sign: '−' },
+    { label: '= True usable',  val: d.usable,        cls: 'wf-usable', sign: '=' },
+  ];
+  const max = d.gross;
+  document.getElementById('waterfallEl').innerHTML = rows.map(r => `
+    <div class="wf-row">
+      <div class="wf-label">${r.label}</div>
+      <div class="wf-sign">${r.sign}</div>
+      <div class="wf-track">
+        <div class="wf-fill ${r.cls}" style="width:${Math.round((r.val/max)*100)}%">
+          <span>$${r.val}B</span>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function renderImportCover(d) {
+  const safe = 6;
+  const bars = [
+    { label: 'Gross cover', m: d.grossImportCover, color: '#4a8fff', tc: '#0a1a3a' },
+    { label: 'Usable cover', m: d.usableImportCover, color: '#1dc9a4', tc: '#002a1a' },
+    { label: 'Safe floor', m: safe, color: '#f5a623', tc: '#2a1500' },
+  ];
+  const maxM = Math.max(...bars.map(b => b.m)) + 1;
+  document.getElementById('coverGrid').innerHTML = bars.map(b => {
+    const h = Math.round((b.m / maxM) * 66);
+    return `<div class="cover-item">
+      <div class="cover-bar-wrap">
+        <div class="cover-bar" style="height:${h}px;background:${b.color};">
+          <span style="color:${b.tc}">${b.m}</span>
+        </div>
+      </div>
+      <div class="cover-lbl">${b.label}</div>
+    </div>`;
+  }).join('');
+
+  const ok = d.usableImportCover >= safe;
+  document.getElementById('safeBadge').innerHTML = `
+    <div class="safe-badge ${ok ? 'ok' : 'warn'}">
+      ${ok ? '✓' : '⚠'} Usable cover ${d.usableImportCover} months — ${ok ? 'above' : 'below'} 6-month safety threshold
+    </div>`;
+}
+
+function renderTrend(data) {
+  const latest = { week: 'May 1', gross: data.gross, usable: data.usable };
+  const history = [...TREND_HISTORY.slice(0, -1), latest];
+
+  const labels = history.map(h => h.week);
+  const grossData = history.map(h => h.gross);
+  const usableData = history.map(h => h.usable);
+
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(document.getElementById('trendChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Gross reserves',
+          data: grossData,
+          borderColor: '#4a8fff',
+          backgroundColor: 'rgba(74,143,255,0.07)',
+          borderWidth: 1.5,
+          pointRadius: 3,
+          pointBackgroundColor: '#4a8fff',
+          tension: 0.3,
+          fill: false,
+          borderDash: [4,3],
+        },
+        {
+          label: 'Usable reserves',
+          data: usableData,
+          borderColor: '#1dc9a4',
+          backgroundColor: 'rgba(29,201,164,0.08)',
+          borderWidth: 2,
+          pointRadius: 3,
+          pointBackgroundColor: '#1dc9a4',
+          tension: 0.3,
+          fill: true,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1e2336',
+          borderColor: 'rgba(255,255,255,0.1)',
+          borderWidth: 1,
+          titleColor: '#7b8099',
+          bodyColor: '#e8eaf0',
+          callbacks: { label: ctx => ` $${ctx.parsed.y}B` }
+        }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#4a5068', font: { family: 'DM Mono', size: 10 } } },
+        y: {
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: { color: '#4a5068', font: { family: 'DM Mono', size: 10 }, callback: v => `$${v}B` }
+        }
+      }
+    }
+  });
+
+  // Custom legend
+  const legendHtml = `
+    <div style="display:flex;gap:16px;margin-top:8px;font-size:10px;color:#7b8099;font-family:'DM Mono',monospace;">
+      <span style="display:flex;align-items:center;gap:4px;"><span style="width:16px;height:2px;background:#4a8fff;border-radius:1px;display:inline-block;border-top:2px dashed #4a8fff;"></span> Gross</span>
+      <span style="display:flex;align-items:center;gap:4px;"><span style="width:16px;height:2px;background:#1dc9a4;border-radius:1px;display:inline-block;"></span> Usable</span>
+    </div>`;
+  document.querySelector('.chart-wrap').insertAdjacentHTML('afterend', legendHtml);
+}
+
+function renderNews(items) {
+  allNewsItems = items;
+  applyNewsFilter(document.querySelector('.filter-btn.active')?.dataset.filter || 'all');
+  document.getElementById('newsLoading').style.display = 'none';
+  document.getElementById('newsFeed').style.display = 'block';
+  document.getElementById('newsUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function applyNewsFilter(filter) {
+  const items = filter === 'all' ? allNewsItems
+    : filter === 'pos' || filter === 'neg' ? allNewsItems.filter(n => n.impact === filter)
+    : allNewsItems.filter(n => n.category === filter);
+
+  document.getElementById('newsFeed').innerHTML = items.map(n => `
+    <div class="news-item">
+      <div>
+        <span class="news-tag ${n.impact}">${n.impact === 'pos' ? '▲ Positive' : n.impact === 'neg' ? '▼ Negative' : '● Watch'}</span>
+      </div>
+      <div class="news-text">${n.text}</div>
+      <div class="news-meta">
+        <span>${n.source}</span>
+        <span>·</span>
+        <span>${n.age}</span>
+        ${n.category ? `<span class="news-cat">${n.category}</span>` : ''}
+      </div>
+    </div>`).join('') || '<div style="padding:20px;text-align:center;color:#4a5068;font-size:12px;">No items match this filter</div>';
+}
+
+function filterNews(filter, btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  applyNewsFilter(filter);
+}
+
+function showError(msg, type = 'error') {
+  const el = document.getElementById('errorBanner');
+  el.textContent = (type === 'warn' ? '⚠ ' : '✕ ') + msg;
+  el.style.display = 'block';
+  el.style.background = type === 'warn' ? 'var(--amber-bg)' : 'var(--red-bg)';
+  el.style.color = type === 'warn' ? 'var(--amber)' : 'var(--red)';
+}
+
+async function refreshAll(force = false) {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('loading');
+  btn.disabled = true;
+  document.getElementById('errorBanner').style.display = 'none';
+
+  try {
+    const { reserves, news } = await fetchAll(force);
+    renderMetrics(reserves);
+    renderWaterfall(reserves);
+    renderImportCover(reserves);
+    renderTrend(reserves);
+    if (news?.items?.length) renderNews(news.items);
+  } catch (err) {
+    showError('Could not reach backend. Make sure the server is running on localhost:3000.');
+    // Still try to show static data
+    const staticReserves = {
+      weekEnding: 'May 1, 2026', gross: 690.7, prevGross: 698.5,
+      gold: 131, forwardBook: 103, forwardBookAsOf: '2026-03',
+      sdr: 18.7, usable: 438.0, monthlyImports: 62,
+      grossImportCover: 11.1, usableImportCover: 7.1,
+    };
+    renderMetrics(staticReserves);
+    renderWaterfall(staticReserves);
+    renderImportCover(staticReserves);
+    renderTrend(staticReserves);
+  }
+
+  btn.classList.remove('loading');
+  btn.disabled = false;
+}
+
+// Boot
+refreshAll(false);
+// Auto-refresh every 30 minutes
+setInterval(() => refreshAll(false), 30 * 60 * 1000);
+</script>
+</body>
+</html>
