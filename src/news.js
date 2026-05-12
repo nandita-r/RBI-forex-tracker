@@ -102,6 +102,7 @@ async function fetchForexNews() {
         text: trunc(item.title, 25),
         source: item.source,
         age: timeAgo(item.pubDate),
+        pubDateMs: item.pubDate ? new Date(item.pubDate*1000||item.pubDate).getTime() : 0,
         category: category(full),
         link: item.link,
       };
