@@ -20,7 +20,7 @@ let lastReserveFetch = null;
 let lastNewsFetch = null;
 
 const RESERVE_CACHE_TTL_MS = 60 * 60 * 1000;      // 1 hour
-const NEWS_CACHE_TTL_MS   = 30 * 60 * 1000;        // 30 minutes
+const NEWS_CACHE_TTL_MS   = 15 * 60 * 1000;        // 15 minutes
 
 function isCacheStale(lastFetch, ttl) {
   if (!lastFetch) return true;
@@ -153,8 +153,8 @@ cron.schedule('0 13 * * 5', async () => {
   await refreshReserves(true);
 }, { timezone: 'UTC' });
 
-// Refresh news every 2 hours
-cron.schedule('0 */2 * * *', async () => {
+// Refresh news every 15 minutes
+cron.schedule('*/15 * * * *', async () => {
   console.log('[Cron] Scheduled news refresh');
   await refreshNews(true);
 });
