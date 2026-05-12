@@ -13,7 +13,7 @@ const KNOWN_FORWARD_BOOK = {
 };
 
 // SDR + IMF tranche is relatively stable (~$18-20B), update quarterly
-const SDR_IMF = 18.7;
+const SDR_IMF = 23.7;  // SDR $18.789B + IMF reserve tranche $4.863B
 
 // Monthly imports (goods) in USD Bn - update quarterly from DGCI&S data
 const MONTHLY_IMPORTS = 62.0;
@@ -138,8 +138,8 @@ function extractNumbers(str) {
 function getFallbackData(errorMsg) {
   const fwdBook = getLatestForwardBook();
   const gross = 690.7;
-  const gold = 131.0;
-  const sdr = SDR_IMF;
+  const gold = 115.2;  // RBI WSS May 1 2026: gold $115.216B
+  const sdr = 23.7;    // SDR $18.789B + IMF tranche $4.863B
   const usable = +(gross - gold - fwdBook.value - sdr).toFixed(1);
   return {
     success: false,
