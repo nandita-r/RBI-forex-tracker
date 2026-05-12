@@ -184,6 +184,48 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); font
 .hero-stat-val.neg { color: var(--red); }
 .hero-stat-val.pos { color: var(--green); }
 
+/* Scenario toggle */
+.scenario-section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; }
+.scenario-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+.scenario-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+.scenario-subtitle { font-size: 11px; color: var(--dim); margin-top: 2px; }
+.slider-wrap { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.slider-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.rupee-slider {
+  flex: 1; -webkit-appearance: none; appearance: none;
+  height: 4px; border-radius: 2px; outline: none; cursor: pointer;
+  background: linear-gradient(to right, var(--green) 0%, var(--amber) 50%, var(--red) 100%);
+}
+.rupee-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--text); border: 2px solid var(--teal);
+  cursor: pointer; box-shadow: 0 0 6px rgba(29,201,164,0.4);
+}
+.rupee-slider::-moz-range-thumb {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--text); border: 2px solid var(--teal);
+  cursor: pointer;
+}
+.slider-val { font-family: var(--mono); font-size: 15px; font-weight: 500; color: var(--text); min-width: 52px; text-align: right; }
+.scenario-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+.scenario-card { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; text-align: center; }
+.scenario-card-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+.scenario-card-value { font-family: var(--mono); font-size: 18px; font-weight: 500; }
+.scenario-card-sub { font-size: 10px; color: var(--dim); margin-top: 3px; }
+.scenario-verdict { border-radius: 8px; padding: 12px 16px; font-size: 12px; line-height: 1.6; }
+.scenario-verdict.safe   { background: var(--green-bg); border: 1px solid rgba(34,200,122,0.2); color: #a0f0c8; }
+.scenario-verdict.caution{ background: var(--amber-bg); border: 1px solid rgba(245,166,35,0.2); color: #f5cc80; }
+.scenario-verdict.danger { background: var(--red-bg);   border: 1px solid rgba(240,90,90,0.2);  color: #f5a0a0; }
+.scenario-presets { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.preset-btn {
+  font-size: 10px; padding: 4px 10px; border-radius: 4px; cursor: pointer;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border2); color: var(--muted);
+  font-family: var(--mono); transition: all 0.15s;
+}
+.preset-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+.preset-btn.active { border-color: var(--teal); color: var(--teal); background: rgba(29,201,164,0.08); }
+
 @media (max-width: 900px) {
   .main { grid-template-columns: 1fr; height: auto; overflow: visible; }
   .right { border-left: none; border-top: 1px solid var(--border); max-height: 500px; }
@@ -191,6 +233,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); font
   .hero { flex-direction: column; align-items: flex-start; }
   .hero-divider { display: none; }
   .hero-value { font-size: 38px; }
+  .scenario-grid { grid-template-columns: repeat(2,1fr); }
 }
 </style>
 </head>
@@ -314,6 +357,63 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); font
       </div>
     </div>
 
+    <div class="scenario-section">
+      <div class="scenario-header">
+        <div>
+          <div class="scenario-title">🔢 Rupee scenario analyser</div>
+          <div class="scenario-subtitle">Drag to model impact of different USD/INR levels on reserves &amp; import cover</div>
+        </div>
+      </div>
+      <div class="scenario-presets" id="scenarioPresets">
+        <button class="preset-btn" onclick="setScenario(83.9)">₹83.9 (52w low)</button>
+        <button class="preset-btn" onclick="setScenario(89.0)">₹89 (pre-crisis)</button>
+        <button class="preset-btn active" onclick="setScenario(94.85)">₹94.85 (current)</button>
+        <button class="preset-btn" onclick="setScenario(97.0)">₹97 (stress)</button>
+        <button class="preset-btn" onclick="setScenario(100.0)">₹100 (severe)</button>
+        <button class="preset-btn" onclick="setScenario(105.0)">₹105 (crisis)</button>
+      </div>
+      <div class="slider-wrap">
+        <span class="slider-label">₹/USD</span>
+        <input type="range" class="rupee-slider" id="rupeeSlider"
+          min="80" max="110" step="0.5" value="94.85"
+          oninput="updateScenario(this.value)">
+        <span class="slider-val" id="sliderVal">₹94.85</span>
+      </div>
+      <div class="scenario-grid" id="scenarioGrid">
+        <div class="scenario-card">
+          <div class="scenario-card-label">Rupee depreciation</div>
+          <div class="scenario-card-value" id="scDepreciation">—</div>
+          <div class="scenario-card-sub">vs ₹83.9 (52w low)</div>
+        </div>
+        <div class="scenario-card">
+          <div class="scenario-card-label">Extra import cost</div>
+          <div class="scenario-card-value" id="scImportCost">—</div>
+          <div class="scenario-card-sub">annual oil bill add-on</div>
+        </div>
+        <div class="scenario-card">
+          <div class="scenario-card-label">Import cover</div>
+          <div class="scenario-card-value" id="scImportCover">—</div>
+          <div class="scenario-card-sub">months (usable reserves)</div>
+        </div>
+        <div class="scenario-card">
+          <div class="scenario-card-label">Usable reserves</div>
+          <div class="scenario-card-value" id="scUsable">—</div>
+          <div class="scenario-card-sub">real-terms USD value</div>
+        </div>
+        <div class="scenario-card">
+          <div class="scenario-card-label">RBI fwd book (INR)</div>
+          <div class="scenario-card-value" id="scFwdINR">—</div>
+          <div class="scenario-card-sub">obligation in rupees</div>
+        </div>
+        <div class="scenario-card">
+          <div class="scenario-card-label">Status</div>
+          <div class="scenario-card-value" id="scStatus">—</div>
+          <div class="scenario-card-sub" id="scStatusSub">—</div>
+        </div>
+      </div>
+      <div class="scenario-verdict" id="scVerdict"></div>
+    </div>
+
     <div class="analyst-note">
       <div class="analyst-title">⚠ Analyst note — forward book unwind: a one-time effect</div>
       <div class="analyst-body">
@@ -409,6 +509,10 @@ function renderMetrics(d) {
   }
 
   if (d.note) showError(d.note, 'warn');
+  // Feed live data into scenario analyser
+  scenarioReserveData = d;
+  const currentSpot = parseFloat(document.getElementById('spotRate').textContent) || 94.85;
+  updateScenario(document.getElementById('rupeeSlider').value || currentSpot);
 }
 
 function renderWaterfall(d) {
@@ -785,6 +889,131 @@ function updateNewsCountdown() {
   if (el) el.textContent = 'next in ' + m + ':' + String(s).padStart(2,'0');
 }
 setInterval(updateNewsCountdown, 1000);
+
+// ── Scenario analyser ──────────────────────────────────────────
+let scenarioReserveData = null; // set when reserves load
+
+function setScenario(val) {
+  document.getElementById('rupeeSlider').value = val;
+  document.querySelectorAll('.preset-btn').forEach(b => {
+    b.classList.toggle('active', parseFloat(b.getAttribute('onclick').match(/[d.]+/)[0]) === val);
+  });
+  updateScenario(val);
+}
+
+function updateScenario(rupeeVal) {
+  rupeeVal = parseFloat(rupeeVal);
+  document.getElementById('sliderVal').textContent = '₹' + rupeeVal.toFixed(2);
+
+  const BASE_RUPEE   = 83.9;    // 52-week low (strongest rupee)
+  const CURR_RUPEE   = 94.85;   // current level
+  const USABLE_USD   = scenarioReserveData ? scenarioReserveData.usable   : 438;
+  const FWD_USD      = scenarioReserveData ? scenarioReserveData.forwardBook : 103;
+  const MONTHLY_IMP  = scenarioReserveData ? scenarioReserveData.monthlyImports : 62;
+  const OIL_BILL_USD = 130; // India annual oil import bill ~$130B
+
+  // Depreciation from base
+  const deprFromBase = (((rupeeVal - BASE_RUPEE) / BASE_RUPEE) * 100).toFixed(1);
+  const deprFromCurr = (((rupeeVal - CURR_RUPEE) / CURR_RUPEE) * 100).toFixed(1);
+
+  // Extra oil cost: same barrels, higher INR price, but paid in USD — 
+  // the USD cost itself rises when rupee falls because India pays in USD
+  // Proxy: each 1% rupee fall raises effective import bill by ~0.8% (pass-through)
+  const pctChange = (rupeeVal - CURR_RUPEE) / CURR_RUPEE;
+  const extraOilUSD = (OIL_BILL_USD * pctChange * 0.8).toFixed(1);
+
+  // Effective monthly import cost rises proportionally
+  const adjMonthlyImp = MONTHLY_IMP * (1 + pctChange * 0.5);
+
+  // Usable reserves stay in USD terms but real purchasing power changes
+  const importCover = (USABLE_USD / adjMonthlyImp).toFixed(1);
+
+  // Forward book obligation in INR
+  const fwdINR = ((FWD_USD * rupeeVal) / 1000).toFixed(1); // in trillion INR
+
+  // Status thresholds
+  let status, statusSub, verdictClass, verdictText;
+  const cover = parseFloat(importCover);
+
+  if (cover >= 9) {
+    status = '✓ Safe'; statusSub = 'Comfortable buffer';
+    verdictClass = 'safe';
+    verdictText = '<strong>Comfortable zone.</strong> At ₹' + rupeeVal.toFixed(2) + ', import cover of ' + importCover + ' months is well above the 6-month RBI threshold and the IMF's 3-month minimum. Reserves provide adequate cushion for external shocks.';
+  } else if (cover >= 6) {
+    status = '⚡ Adequate'; statusSub = 'Above threshold';
+    verdictClass = 'safe';
+    verdictText = '<strong>Adequate but watch closely.</strong> At ₹' + rupeeVal.toFixed(2) + ', import cover of ' + importCover + ' months stays above the 6-month safety floor. The RBI can manage at this level but has limited room for further deterioration.';
+  } else if (cover >= 4) {
+    status = '⚠ Caution'; statusSub = 'Approaching danger';
+    verdictClass = 'caution';
+    verdictText = '<strong>Caution zone.</strong> At ₹' + rupeeVal.toFixed(2) + ', import cover falls to ' + importCover + ' months — below the 6-month RBI threshold. This would likely trigger emergency measures: emergency rate hikes, import duty increases, gold sales, or IMF consultation.';
+  } else if (cover >= 3) {
+    status = '🔴 Danger'; statusSub = 'Below safe floor';
+    verdictClass = 'danger';
+    verdictText = '<strong>Danger zone.</strong> At ₹' + rupeeVal.toFixed(2) + ', import cover collapses to ' + importCover + ' months — near the IMF's 3-month minimum. India would face severe credibility pressure, likely credit rating downgrades, and may need to draw on the IMF. This is the 1991 scenario.';
+  } else {
+    status = '🆘 Crisis'; statusSub = 'IMF territory';
+    verdictClass = 'danger';
+    verdictText = '<strong>Crisis — IMF territory.</strong> At ₹' + rupeeVal.toFixed(2) + ', import cover of ' + importCover + ' months is below the IMF minimum. India would likely need an emergency IMF programme. The last time India was here was 1991, when it pledged gold to avert default.';
+  }
+
+  // Update cards
+  document.getElementById('scDepreciation').textContent = (deprFromBase >= 0 ? '+' : '') + deprFromBase + '%';
+  document.getElementById('scDepreciation').style.color = deprFromBase > 0 ? 'var(--red)' : 'var(--green)';
+
+  const extraSign = parseFloat(extraOilUSD) > 0 ? '+' : '';
+  document.getElementById('scImportCost').textContent = extraSign + '
+// Auto-refresh every 30 minutes
+setInterval(() => refreshAll(false), 30 * 60 * 1000);
+// Auto-refresh spot rate every 5 minutes
+setInterval(async () => { const s = await fetchSpotRate(); renderSpotMetrics(s); if (s?.pts) renderForexChart(s.pts); }, 5 * 60 * 1000);
+// Auto-refresh news every 15 minutes independently
+setInterval(async () => {
+  try {
+    const r = await fetch(API_BASE + '/api/news?refresh=true');
+    const { data } = await r.json();
+    if (data?.items?.length) renderNews(data.items);
+  } catch(e) { console.warn('News auto-refresh failed', e); }
+}, 15 * 60 * 1000);
+</script>
+</body>
+</html>
+ + extraOilUSD + 'B';
+  document.getElementById('scImportCost').style.color = parseFloat(extraOilUSD) > 0 ? 'var(--red)' : 'var(--green)';
+
+  document.getElementById('scImportCover').textContent = importCover + ' mo';
+  document.getElementById('scImportCover').style.color = cover >= 6 ? 'var(--green)' : cover >= 4 ? 'var(--amber)' : 'var(--red)';
+
+  document.getElementById('scUsable').textContent = '
+// Auto-refresh every 30 minutes
+setInterval(() => refreshAll(false), 30 * 60 * 1000);
+// Auto-refresh spot rate every 5 minutes
+setInterval(async () => { const s = await fetchSpotRate(); renderSpotMetrics(s); if (s?.pts) renderForexChart(s.pts); }, 5 * 60 * 1000);
+// Auto-refresh news every 15 minutes independently
+setInterval(async () => {
+  try {
+    const r = await fetch(API_BASE + '/api/news?refresh=true');
+    const { data } = await r.json();
+    if (data?.items?.length) renderNews(data.items);
+  } catch(e) { console.warn('News auto-refresh failed', e); }
+}, 15 * 60 * 1000);
+</script>
+</body>
+</html>
+ + USABLE_USD + 'B';
+  document.getElementById('scUsable').style.color = 'var(--teal)';
+
+  document.getElementById('scFwdINR').textContent = '₹' + fwdINR + 'T';
+  document.getElementById('scFwdINR').style.color = 'var(--amber)';
+
+  document.getElementById('scStatus').textContent = status;
+  document.getElementById('scStatus').style.color = cover >= 6 ? 'var(--green)' : cover >= 4 ? 'var(--amber)' : 'var(--red)';
+  document.getElementById('scStatusSub').textContent = statusSub;
+
+  const verdict = document.getElementById('scVerdict');
+  verdict.className = 'scenario-verdict ' + verdictClass;
+  verdict.innerHTML = verdictText;
+}
 
 // Boot
 refreshAll(false);
