@@ -5,11 +5,14 @@ const RBI_WSS_URL = 'https://website.rbi.org.in/web/rbi/publications/weekly-stat
 
 // Known forward book data (RBI publishes this monthly with ~6 week lag)
 // Update manually when RBI releases new data
+// RBI publishes forward book data with ~6 week lag
+// Mar 2026 = $103B (Bloomberg calc incl. >1yr swaps); official RBI data pending
+// Apr 2026 data expected around mid-May 2026 — update when released
 const KNOWN_FORWARD_BOOK = {
-  '2026-03': 103.0,
-  '2026-02': 77.25,
-  '2026-01': 68.42,
-  '2025-12': 62.35,
+  '2026-03': 103.0,  // Bloomberg estimate incl. long-tenor swaps; record high
+  '2026-02': 77.25,  // RBI official
+  '2026-01': 68.42,  // RBI official
+  '2025-12': 62.35,  // RBI official
 };
 
 // SDR + IMF tranche is relatively stable (~$18-20B), update quarterly
