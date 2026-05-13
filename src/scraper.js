@@ -1,222 +1,167 @@
-require('dotenv').config();
-const express = require('express');
-const cron = require('node-cron');
-const cors = require('cors');
-const path = require('path');
-const { fetchRBIReserves } = require('./src/scraper');
-const { fetchForexNews } = require('./src/news');
+const axios = require('axios');
+const cheerio = require('cheerio');
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+const RBI_WSS_URL = 'https://website.rbi.org.in/web/rbi/publications/weekly-statistical-supplement-extract';
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+// Known forward book data (RBI publishes this monthly with ~6 week lag)
+// Update manually when RBI releases new data
+// RBI publishes forward book data with ~6 week lag
+// Mar 2026 = $103B (Bloomberg calc incl. >1yr swaps); official RBI data pending
+// Apr 2026 data expected around mid-May 2026 — update when released
+const KNOWN_FORWARD_BOOK = {
+  '2026-03': 103.0,  // Bloomberg estimate incl. long-tenor swaps; record high
+  '2026-02': 77.25,  // RBI official
+  '2026-01': 68.42,  // RBI official
+  '2025-12': 62.35,  // RBI official
+};
 
-// In-memory cache
-let reserveCache = null;
-let newsCache = null;
-let lastReserveFetch = null;
-let lastNewsFetch = null;
+// SDR + IMF tranche is relatively stable (~$18-20B), update quarterly
+const SDR_IMF = 23.7;  // SDR $18.789B + IMF reserve tranche $4.863B
 
-const RESERVE_CACHE_TTL_MS = 60 * 60 * 1000;      // 1 hour
-const NEWS_CACHE_TTL_MS   = 15 * 60 * 1000;        // 15 minutes
+// Monthly imports (goods) in USD Bn - update quarterly from DGCI&S data
+const MONTHLY_IMPORTS = 62.0;
 
-function isCacheStale(lastFetch, ttl) {
-  if (!lastFetch) return true;
-  return (Date.now() - lastFetch) > ttl;
+function getLatestForwardBook() {
+  const keys = Object.keys(KNOWN_FORWARD_BOOK).sort().reverse();
+  return {
+    value: KNOWN_FORWARD_BOOK[keys[0]],
+    asOf: keys[0],
+  };
 }
 
-// Refresh reserve data
-async function refreshReserves(force = false) {
-  if (!force && !isCacheStale(lastReserveFetch, RESERVE_CACHE_TTL_MS)) {
-    return reserveCache;
-  }
-  console.log('[Cache] Refreshing RBI reserve data...');
-  const data = await fetchRBIReserves();
-  reserveCache = data;
-  lastReserveFetch = Date.now();
-  console.log(`[Cache] Reserves updated — gross: $${data.gross}B, usable: $${data.usable}B`);
-  return data;
-}
-
-// Refresh news
-async function refreshNews(force = false) {
-  if (!force && !isCacheStale(lastNewsFetch, NEWS_CACHE_TTL_MS)) {
-    return newsCache;
-  }
-  console.log('[Cache] Refreshing news feed...');
-  const data = await fetchForexNews();
-  newsCache = data;
-  lastNewsFetch = Date.now();
-  console.log(`[Cache] News updated — ${data.items?.length || 0} items`);
-  return data;
-}
-
-// ── API Routes ────────────────────────────────────────────────
-
-// GET /api/reserves — returns current reserve data
-app.get('/api/reserves', async (req, res) => {
+async function fetchRBIReserves() {
   try {
-    const force = req.query.refresh === 'true';
-    const data = await refreshReserves(force);
-    res.json({ ok: true, data, cachedAt: new Date(lastReserveFetch).toISOString() });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-// GET /api/news — returns impact-assessed news feed
-app.get('/api/news', async (req, res) => {
-  try {
-    const force = req.query.refresh === 'true';
-    const data = await refreshNews(force);
-    res.json({ ok: true, data, cachedAt: new Date(lastNewsFetch).toISOString() });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-// GET /api/all — reserves + news in one call (what the frontend uses)
-app.get('/api/all', async (req, res) => {
-  try {
-    const force = req.query.refresh === 'true';
-    const [reserves, news] = await Promise.all([
-      refreshReserves(force),
-      refreshNews(force),
-    ]);
-    res.json({
-      ok: true,
-      reserves,
-      news,
-      serverTime: new Date().toISOString(),
-    });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-
-// GET /api/spot — proxies Yahoo Finance USD/INR data (avoids browser CORS block)
-app.get('/api/spot', async (req, res) => {
-  try {
-    const axios = require('axios');
-    const url = 'https://query1.finance.yahoo.com/v8/finance/chart/USDINR%3DX?interval=5m&range=1d&includePrePost=false';
-    const { data } = await axios.get(url, {
+    const { data: html } = await axios.get(RBI_WSS_URL, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; RBITracker/1.0)',
-        'Accept': 'application/json',
+        'Accept': 'text/html,application/xhtml+xml',
       },
-      timeout: 10000,
+      timeout: 15000,
     });
 
-    const result = data.chart.result[0];
-    const meta = result.meta;
-    const timestamps = result.timestamp || [];
-    const closes = result.indicators.quote[0].close || [];
+    const $ = cheerio.load(html);
+    const text = $('body').text();
 
-    const current = +(meta.regularMarketPrice || closes.filter(Boolean).pop()).toFixed(4);
-    const prev = +(meta.chartPreviousClose || meta.previousClose).toFixed(4);
-    const low52 = meta.fiftyTwoWeekLow;
-    const high52 = meta.fiftyTwoWeekHigh;
+    // RBI WSS table 2 contains: Total Reserves, FCA, Gold, SDRs, IMF
+    // Pattern: "Total Reserves" followed by INR crore then USD Mn values
+    // We look for USD Mn values in the table rows
 
-    const pts = timestamps.map((t, i) => ({
-      time: new Date(t * 1000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' }),
-      val: closes[i] ? +closes[i].toFixed(4) : null,
-    })).filter(p => p.val !== null).slice(-80);
+    let totalReservesUSD = null;
+    let goldUSD = null;
+    let fcaUSD = null;
+    let sdrUSD = null;
+    let weekEnding = null;
 
-    res.json({ ok: true, current, prev, low52, high52, pts, fetchedAt: new Date().toISOString() });
-  } catch (err) {
-    console.error('[Spot] Yahoo Finance fetch failed:', err.message);
-    // Fallback: return approximate known data
-    res.json({ ok: false, error: err.message, current: 94.85, prev: 94.60, low52: 83.87, high52: 95.48, pts: [], fetchedAt: new Date().toISOString() });
-  }
-});
-
-
-// GET /api/news/test — verify Finnhub connection and show raw response
-app.get('/api/news/test', async (req, res) => {
-  const key = process.env.FINNHUB_API_KEY;
-  if (!key || key.length < 5) {
-    return res.json({ ok: false, error: 'FINNHUB_API_KEY not set', env: Object.keys(process.env).filter(k => k.includes('FINNHUB')) });
-  }
-  try {
-    const axios = require('axios');
-    const url = 'https://finnhub.io/api/v1/news?category=general&token=' + key;
-    const resp = await axios.get(url, { timeout: 10000 });
-    const items = Array.isArray(resp.data) ? resp.data : [];
-    res.json({
-      ok: true,
-      keyPrefix: key.substring(0, 6) + '...',
-      totalItems: items.length,
-      sampleTitles: items.slice(0, 5).map(i => i.headline),
-      fetchedAt: new Date().toISOString(),
-    });
-  } catch(e) {
-    res.json({ ok: false, error: e.message, status: e.response && e.response.status });
-  }
-});
-
-// GET /api/health
-app.get('/api/health', (req, res) => {
-  res.json({
-    ok: true,
-    uptime: Math.round(process.uptime()),
-    reserveCache: !!reserveCache,
-    newsCache: !!newsCache,
-    lastReserveFetch: lastReserveFetch ? new Date(lastReserveFetch).toISOString() : null,
-    lastNewsFetch: lastNewsFetch ? new Date(lastNewsFetch).toISOString() : null,
-  });
-});
-
-// ── Scheduled Jobs ────────────────────────────────────────────
-
-// RBI publishes WSS every Friday ~6pm IST — run cron at 6:30pm IST (13:00 UTC) Friday
-cron.schedule('0 13 * * 5', async () => {
-  console.log('[Cron] Friday WSS refresh triggered');
-  await refreshReserves(true);
-}, { timezone: 'UTC' });
-
-// Refresh news every 15 minutes
-cron.schedule('*/15 * * * *', async () => {
-  console.log('[Cron] Scheduled news refresh');
-  await refreshNews(true);
-});
-
-// ── Startup ───────────────────────────────────────────────────
-
-app.listen(PORT, () => {
-  console.log(`\n RBI Forex Tracker running on http://localhost:${PORT}`);
-  console.log(` API: http://localhost:${PORT}/api/all`);
-  console.log(` Healthcheck: http://localhost:${PORT}/api/health\n`);
-
-  // Load data in background AFTER server is listening
-  // so Railway healthcheck passes immediately
-  setTimeout(async () => {
-    console.log('[Startup] Pre-loading data in background...');
-    try {
-      await Promise.all([refreshReserves(true), refreshNews(true)]);
-      console.log('[Startup] Data pre-loaded successfully');
-    } catch(e) {
-      console.warn('[Startup] Pre-load failed (will retry on first request):', e.message);
+    // Extract week ending date
+    const dateMatch = text.match(/As on\s+([A-Za-z]+\.?\s+\d{1,2},?\s*\d{4})/i);
+    if (dateMatch) {
+      weekEnding = dateMatch[1].replace(/\./g, '').trim();
     }
-  }, 2000); // 2 second delay — server is ready before data loads
-});
 
+    // Extract forex table rows - look for USD Mn columns
+    // RBI format: rows of ₹Cr | US$Mn | ₹Cr | US$Mn | ...
+    // Total Reserves row comes first, then FCA, Gold, SDRs, Reserve Tranche
 
-// ── Keep-alive: self-ping every 14 min to prevent Railway free-tier sleep ──
-// (Railway free tier sleeps after ~15 min inactivity without this)
-if (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_STATIC_URL) {
-  const baseUrl = 'https://' + (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_STATIC_URL);
-  const http = require('https');
-  setInterval(() => {
-    http.get(baseUrl + '/api/health', (res) => {
-      console.log('[KeepAlive] Pinged /api/health ->', res.statusCode);
-    }).on('error', (e) => {
-      console.warn('[KeepAlive] Ping failed:', e.message);
-    });
-  }, 14 * 60 * 1000); // every 14 minutes
-  console.log('[KeepAlive] Enabled for', baseUrl);
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      if (/total\s+reserves?/i.test(line)) {
+        // Next few lines contain the numbers - find USD Mn (larger numbers after INR crore)
+        const nums = extractNumbers(lines.slice(i, i + 5).join(' '));
+        if (nums.length >= 2) {
+          // USD Mn value is typically the 2nd number (after INR crore)
+          totalReservesUSD = nums[1] / 1000; // convert Mn to Bn
+        }
+      }
+
+      if (/foreign\s+currency\s+assets?/i.test(line) || /^1\.1\s/i.test(line)) {
+        const nums = extractNumbers(lines.slice(i, i + 5).join(' '));
+        if (nums.length >= 2) {
+          fcaUSD = nums[1] / 1000;
+        }
+      }
+
+      if (/^(1\.3|gold(\s+reserves?)?)\s/i.test(line) || /^\d+\s+gold/i.test(line)) {
+        const nums = extractNumbers(lines.slice(i, i + 5).join(' '));
+        if (nums.length >= 2) {
+          goldUSD = nums[1] / 1000;
+        }
+      }
+
+      if (/SDR|special drawing/i.test(line)) {
+        const nums = extractNumbers(lines.slice(i, i + 5).join(' '));
+        if (nums.length >= 2) {
+          sdrUSD = nums[1] / 1000;
+        }
+      }
+    }
+
+    if (!totalReservesUSD) {
+      throw new Error('Could not parse reserve data from RBI WSS page');
+    }
+
+    const fwdBook = getLatestForwardBook();
+    const goldVal = goldUSD || 131.0;
+    const sdrVal = sdrUSD || SDR_IMF;
+    const usable = +(totalReservesUSD - goldVal - fwdBook.value - sdrVal).toFixed(1);
+
+    return {
+      success: true,
+      source: 'rbi_wss_live',
+      weekEnding: weekEnding || 'Latest',
+      gross: +totalReservesUSD.toFixed(1),
+      fca: fcaUSD ? +fcaUSD.toFixed(1) : null,
+      gold: +goldVal.toFixed(1),
+      forwardBook: fwdBook.value,
+      forwardBookAsOf: fwdBook.asOf,
+      sdr: +sdrVal.toFixed(1),
+      usable,
+      monthlyImports: MONTHLY_IMPORTS,
+      grossImportCover: +(totalReservesUSD / MONTHLY_IMPORTS).toFixed(1),
+      usableImportCover: +(usable / MONTHLY_IMPORTS).toFixed(1),
+      fetchedAt: new Date().toISOString(),
+    };
+
+  } catch (err) {
+    console.error('[Scraper] Error fetching RBI data:', err.message);
+    // Return last known good data as fallback
+    return getFallbackData(err.message);
+  }
 }
 
-module.exports = app;
+function extractNumbers(str) {
+  const matches = str.match(/[\d,]+\.?\d*/g) || [];
+  return matches
+    .map(m => parseFloat(m.replace(/,/g, '')))
+    .filter(n => !isNaN(n) && n > 0);
+}
+
+function getFallbackData(errorMsg) {
+  const fwdBook = getLatestForwardBook();
+  const gross = 690.7;
+  const gold = 115.2;  // RBI WSS May 1 2026: gold $115.216B
+  const sdr = 23.7;    // SDR $18.789B + IMF tranche $4.863B
+  const usable = +(gross - gold - fwdBook.value - sdr).toFixed(1);
+  return {
+    success: false,
+    source: 'fallback_cached',
+    error: errorMsg,
+    weekEnding: 'May 1, 2026',
+    gross,
+    fca: 559.7,
+    gold,
+    forwardBook: fwdBook.value,
+    forwardBookAsOf: fwdBook.asOf,
+    sdr,
+    usable,
+    monthlyImports: MONTHLY_IMPORTS,
+    grossImportCover: +(gross / MONTHLY_IMPORTS).toFixed(1),
+    usableImportCover: +(usable / MONTHLY_IMPORTS).toFixed(1),
+    fetchedAt: new Date().toISOString(),
+    note: 'Live scrape failed; showing last known data. RBI WSS may have changed format.',
+  };
+}
+
+module.exports = { fetchRBIReserves, getLatestForwardBook };
