@@ -140,8 +140,8 @@ function extractNumbers(str) {
 
 function getFallbackData(errorMsg) {
   const fwdBook = getLatestForwardBook();
-  const gross = 690.7;
-  const gold = 115.2;  // RBI WSS May 1 2026: gold $115.216B
+  const gross = 697.0;
+  const gold = 120.8;  // RBI WSS May 8 2026: gold surged $5.6B to ~$120.8B
   const sdr = 23.7;    // SDR $18.789B + IMF tranche $4.863B
   const usable = +(gross - gold - fwdBook.value - sdr).toFixed(1);
   return {
