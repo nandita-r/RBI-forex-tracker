@@ -299,7 +299,8 @@ var HISTORY = [
   {week:'Apr 17', gross:703.3, usable:566.6, note:''},
   {week:'Apr 24', gross:698.5, usable:561.8, note:''},
   // May 2026
-  {week:'May 1',  gross:690.7, usable:448.8, note:'Latest'},
+  {week:'May 1',  gross:690.7, usable:448.8, note:''},
+  {week:'May 8',  gross:697.0, usable:449.5, note:'Latest +$6.3B gold surge'},
 ];
 
 function showError(msg,type){
@@ -361,7 +362,7 @@ function renderImportCover(d){
 
 function renderTrend(d){
   // Update last entry with live data
-  var hist=HISTORY.slice(0,-1).concat([{week:'May 1',gross:d.gross,usable:d.usable,note:'Latest'}]);
+  var hist=HISTORY.slice(0,-1).concat([{week:'May 8',gross:d.gross,usable:d.usable,note:'Latest'}]);
   var labels=hist.map(function(h){return h.week;});
   var gd=hist.map(function(h){return h.gross;});
   var ud=hist.map(function(h){return h.usable;});
@@ -551,7 +552,7 @@ async function refreshAll(){
     try{var s=await fetch(API_BASE+'/api/spot');var sd=await s.json();if(sd.current){renderSpotMetrics(sd);if(sd.pts&&sd.pts.length)renderForexChart(sd.pts);}}catch(e){console.warn('Spot failed',e);}
   }catch(e){
     showError('Could not reach server. Using cached data.','warn');
-    var sd={weekEnding:'May 1, 2026',gross:690.7,prevGross:698.5,gold:115.2,forwardBook:103,forwardBookAsOf:'2026-03',sdr:23.7,usable:448.8,monthlyImports:62,grossImportCover:11.1,usableImportCover:7.2};
+    var sd={weekEnding:'May 8, 2026',gross:697.0,prevGross:690.7,gold:120.8,forwardBook:103,forwardBookAsOf:'2026-03',sdr:23.7,usable:449.5,monthlyImports:62,grossImportCover:11.2,usableImportCover:7.2};
     renderMetrics(sd);renderWaterfall(sd);renderImportCover(sd);renderTrend(sd);
   }
   btn.classList.remove('loading');btn.disabled=false;
